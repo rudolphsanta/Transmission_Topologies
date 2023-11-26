@@ -1,0 +1,212 @@
+---
+title: "Switch-Over Analysis"
+author: "Rudolph Santarromana"
+date: "2023-09-26"
+output: html_document
+---
+
+#Setup
+```{r setup, include=FALSE}
+#Initialize libraries and directory
+
+library(tidyverse)
+library(dplyr)
+library(vroom)
+library(peakRAM)
+library(data.table)
+library(readr)
+library(pryr)
+library(R2DT)
+library(parallel)
+library(beepr)
+library(pillar)
+library(ellipsis)
+library(rlang)
+
+setwd("C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over")
+
+finish <- function(n = 3) {
+  for(i in 1:n){
+    beep(1)
+    Sys.sleep(0.5)
+  }
+  beep(5)
+}
+
+options(scipen = 999)
+```
+
+#CHECKPOINT
+```{r SAVE and LOAD: Workspace - }
+#Only the data tables are loaded using this workspace. All functions needed to generate these are not loaded.
+
+save.image("C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Paper_3_Workspace.RData")
+
+load("C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Paper_3_Workspace.RData")
+
+```
+
+```{r Setup the empty distance and depth Matrix}
+max.dist <- N #kilometers. MISSING
+max.depth <- N #meters. MISSING
+
+dist.V <- seq(1, max.dist, by = 1)
+depth.V <- seq(1, max.depth, by = 1)
+
+dist.depth <- expand.grid(dist.V, max.depth.V) #long matrix form
+```
+
+```{r Load datasets of existing projects}
+Project_depths <- c()
+Project_distances <- c()
+Project_size <- c()
+
+```
+
+```{r Assumptions}
+
+```
+
+```{r FUNCTIONS: Export Cable Functions - HVDC}
+###HVDC Calculations
+HVDC.Cables <- read.csv("C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Challenges - Offshore Wind/HVDC_Cable_Data.csv")
+
+HVDC.Cables <- HVDC.Cables %>%
+  rename(Voltage.kV = ï..Voltage.kV) %>%
+  mutate(Circ.Capability.MW = 4*Voltage.kV*Current.A/1000) #a circuit will have two lines. CHECK THIS
+HVDC.Cables <- setDT(HVDC.Cables)
+
+HVDC.Terminal.Cost <- function(S_MVA, num, Fix = Fix.HVDC, Var = Var.HVDC) {
+  offshore.SS.cost <- Fix + (1 + f_t * (num-2))*Var*S_MVA #in USD
+  onshore.SS.cost <- 0.08148*(S_MVA)*1000000*GBP.USD #in USD
+  Terminal.Cost <- offshore.SS.cost + onshore.SS.cost
+  return(Terminal.Cost/1000000) #returns value in MUSD
+  
+}
+
+#end-to-end efficiency
+HVDC.Eff <- function(l_c, S_MVA, V_cn, r_c, n_c) { #km,MVA,kV,Ohm/km,num parallel circuits
+  A <- (S_MVA*pf*eta.off.c)/V_cn^2
+  B <- (r_c * l_c)/(2*n_c)
+  eta.transmission <- 1 - (A*B)
+  return(eta.transmission) #returns a ratio value
+}
+
+# #HVAC
+# #note spacing comes from US DOI - Bureau of Safety and Environmental Enforcement. (2014). Offshore Wind Submarine Cable Spacing Guidance.
+# HVAC.System <- function(plant.MW, dist.km, spacing = 0.06, w.cost = 1, w.eta = 0, w.area = 0) {
+#   HVAC.dt = copy(HVAC.Cables) #create a copy of the base Cables Data
+# 
+#   HVAC.dt[ , Set.Capability.MW := mapply(Set.Capability, rep(dist.km, times = 14), V_cn = Voltage.kV, I_cn = Current.A*10e-4, C = Capacitance.Fkm)]
+#   if(sum(!is.na(HVAC.dt$Set.Capability.MW)) <= 0) { #if none are capable, then just return NAs
+#     HVAC.dt[ , ':=' (N.Sets = NA, Cable.Cost.MUSD = NA, Terminal.Cost.MUSD = NA, Total.Cost.MUSD = NA, Eta = NA, Area.km2 = NA, Total.Cost.NORM = NA, Eta.NORM = NA, Area.NORM = NA, SCORE = NA)]
+# 
+#   } else {
+#     HVAC.dt[ , N.Sets := ceiling(plant.MW/Set.Capability.MW)]
+#     HVAC.dt[ , Cable.Cost.MUSD := mapply(Cable.Cost,unit.cost = .(Cost.GBPkm), dist.km, num = .(N.Sets*2))]
+#     HVAC.dt[ , Terminal.Cost.MUSD := mapply(HVAC.Terminal.Cost, S_MVA=plant.MW*pf, num = .(N.Sets))]
+#     HVAC.dt[ , Total.Cost.MUSD := Cable.Cost.MUSD + Terminal.Cost.MUSD]
+#     HVAC.dt[ , Eta := mapply(HVAC.Eff, dist.km, plant.MW*pf, .(Voltage.kV),.(Resistance.Ohkm),.(N.Sets))]
+#     HVAC.dt[ , Area.km2 := dist.km*(N.Sets+1)*spacing] #area of seabed buffered needed
+#     HVAC.dt[ , Total.Cost.NORM := ifelse(sum(!is.na(Total.Cost.MUSD))>0, Total.Cost.MUSD/max(Total.Cost.MUSD, na.rm = TRUE),NA)]
+#     HVAC.dt[ , Eta.NORM := ifelse(sum(!is.na(Eta))>0,Eta/max(Eta, na.rm = TRUE),NA)]
+#     HVAC.dt[ , Area.NORM := ifelse(sum(!is.na(Area.km2))>0,Area.km2/max(Area.km2, na.rm = TRUE),NA)]
+#     HVAC.dt[ , SCORE := w.cost*(1-Total.Cost.NORM) + w.eta*Eta.NORM + w.area*(1-Area.NORM)]
+#   }
+#   HVAC.dt <- HVAC.dt[order(-SCORE)]
+#   return(HVAC.dt[1,])
+# }
+
+#HVDC
+#note spacing comes from US DOI - Bureau of Safety and Environmental Enforcement. (2014). Offshore Wind Submarine Cable Spacing Guidance.
+HVDC.System <- function(plant.MW, dist.km, spacing = 0.06, w.cost = 1, w.eta = 0, w.area = 0) {
+  HVDC.dt = copy(HVDC.Cables) #Create a copy of the base Cables Data
+  
+  HVDC.dt[ , N.Sets := ceiling(plant.MW/Circ.Capability.MW)]
+  HVDC.dt[ , Cable.Cost.MUSD := mapply(Cable.Cost,unit.cost = .(Cost.GBPkm), dist.km, num = .(N.Sets*2))]
+  HVDC.dt[ , Terminal.Cost.MUSD := mapply(HVDC.Terminal.Cost, S_MVA=plant.MW, num = .(N.Sets))]
+  HVDC.dt[ , Total.Cost.MUSD := Cable.Cost.MUSD + Terminal.Cost.MUSD]
+  HVDC.dt[ , Eta := mapply(HVDC.Eff, dist.km, plant.MW, .(Voltage.kV),.(Resistance.Ohkm),.(N.Sets))]
+  HVDC.dt[ , Area.km2 := dist.km*(N.Sets+1)*spacing] #area of seabed buffer needed
+  HVDC.dt[ , Total.Cost.NORM := ifelse(sum(!is.na(Total.Cost.MUSD))>0, Total.Cost.MUSD/max(Total.Cost.MUSD, na.rm = TRUE),NA)]
+  HVDC.dt[ , Eta.NORM := ifelse(sum(!is.na(Eta))>0,Eta/max(Eta, na.rm = TRUE),NA)]
+  HVDC.dt[ , Area.NORM := ifelse(sum(!is.na(Area.km2))>0,Area.km2/max(Area.km2, na.rm = TRUE),NA)]
+  HVDC.dt[ , SCORE := w.cost*(1-Total.Cost.NORM) + w.eta*Eta.NORM + w.area*(1-Area.NORM)]
+
+  HVDC.dt <- HVDC.dt[order(-SCORE)]
+
+  return(HVDC.dt[1,]) #returns an ordered dataframe, so the best option is the first
+}
+
+#### Function to add HV Cable metrics
+Add.HV.System.Metrics <- function(DT, plant.size.MW, w.cost = 0.5,w.eta = 0.5, w.area = 0) { #takes the data table as an input
+
+  # #Calculate HVAC Metrics for best outcome
+  # HVAC.OUTPUT <- as.data.table(t(mapply(FUN = HVAC.System, dist.km = DT$Shore_dist ,plant.MW = plant.size.MW, w.cost, w.eta, w.area)))
+  # 
+  # HVAC.OUTPUT <- setDT(HVAC.OUTPUT)
+  # 
+  # #Add the metrics we want from the system to the output
+  # DT[ , ':=' (Plant.seabed.cable.AC = unlist(HVAC.OUTPUT[ , "Area.km2"]),
+  #             Plant.cost.export.AC = unlist(HVAC.OUTPUT[ , "Total.Cost.MUSD"]),
+  #             Plant.efficiency.AC = unlist(HVAC.OUTPUT[ , "Eta"]))]
+  # 
+  # rm(HVAC.OUTPUT) #Clean up some memory
+
+  #Calculate HVDC Metrics for best outcome
+  HVDC.OUTPUT <- as.data.table(t(mapply(FUN = HVDC.System, dist.km = DT$Shore_dist ,plant.MW = plant.size.MW, w.cost, w.eta, w.area)))
+
+  HVDC.OUTPUT <- setDT(HVDC.OUTPUT)
+
+  DT[ , ':=' (Plant.seabed.cable.DC = unlist(HVDC.OUTPUT[ , "Area.km2"]),
+              Plant.cost.export.DC = unlist(HVDC.OUTPUT[ , "Total.Cost.MUSD"]),
+              Plant.efficiency.DC = unlist(HVDC.OUTPUT[ , "Eta"]))]
+
+  rm(HVDC.OUTPUT) #Clean up some memory
+
+  return(DT)
+}
+```
+
+```{r FUNCTIONS: Alternative Value Chain}
+# #Offshore Transformer Cost. Is it required for an electrolyzer?
+#Vars: kW of plant
+TR.unit.cost <- 1300*1000 #USD/MW. From Xiang et al. (2016)
+TR.platform <- 6710000 #USD/platform
+n.platforms <- 1
+
+Transformer.cost <- function(plant.size) return((TR.platform*n.platforms)+(TR.unit.cost*plant.size)) #give plant size in MW, returns value in USD
+
+#Electrolyzer Cost. Vars: kW of plant
+EL.unit.cost <- 900*1000 #USD/MW. Saba et al. (2018)
+EL.platform <- 6710000 #USD/platform. Same as the Transformer platform. SENSITIVITY ANALYSIS
+n.platforms <- 1
+#give plant size in MW
+Electrolyzer.cost <- function(plant.size) return((EL.platform*n.platforms)+(EL.unit.cost*plant.size))
+
+H2.gen <- function(electricity.MWh, kWh.kgh2 = 67) { #annual input of electricity in MWh. Source: IRENA, 2020 (Green Hydrogen cost reduction)
+  # prod.rate <- 42 #kWh/kgH2. This is the optimistic case. Pessimistic = 73
+  H2.output <- ((electricity.MWh*1000)/kWh.kgh2)/1000 #gives tH2
+  return(H2.output) #in tH2
+}
+
+#from Popov & Baldynov (2019)
+Loss.H2 <- function(dist.km, liquefaction = 0.15,loss.per.day = 0.0002, ship.speed = 35, fudge = 1.05) {
+  eff.liq <- 1-liquefaction
+  time.in.storage <- 2*dist.km/ship.speed/24 #in days. also includes storage during transport, and waiting while the ship returns from shore
+  eff.storage <- 1-(time.in.storage*loss.per.day*fudge) 
+  eff.tot <- eff.liq*eff.storage
+  return(eff.tot)
+}
+
+#Hydrogen ship cost. A lot of uncertainty on this component
+#costs are between 120M and 43M/ship. An LNG tanker is 71M/ship according to Saadi et al. (2018)
+#Alkhaledi et al. (2022) estimates $440M/ship for a 280,000m^3 ship or 20,000ton capacity. This is huge.
+#do a sensitivity analysis on this part.
+Ship.volume <- 280000 #Capacity in m^3
+Ship.mass <- 20000 #Capacity in tons
+
+Ship.unit.cost <- 440 #MUSD/ship. SENSITIVITY ANALYSIS
+H2Ship.cost <- function(n = 1) return(Ship.unit.cost*n) #in MUSD/plant
+
+```
