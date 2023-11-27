@@ -59,7 +59,7 @@ dist.depth <- expand.grid(dist.V, max.depth.V) #long matrix form
 ```{r Load datasets of existing projects}
 Project_depths <- c()
 Project_distances <- c()
-Project_size <- c()
+Project_size <- c(5)
 
 ```
 

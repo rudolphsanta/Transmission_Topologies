@@ -1,0 +1,933 @@
+---
+title: "Switch-Over Analysis"
+author: "Rudolph Santarromana"
+date: "2023-09-26"
+output: html_document
+---
+#Notes
+```{r}
+# Figure out how to use curtailment. I applied a price for electricity, but what about the curtailment values?
+```
+
+
+#Setup
+```{r setup, include=FALSE}
+#Initialize libraries and directory
+
+library(tidyverse)
+library(dplyr)
+library(vroom)
+library(peakRAM)
+library(data.table)
+library(readr)
+library(pryr)
+library(R2DT)
+library(parallel)
+library(beepr)
+library(pillar)
+library(ellipsis)
+library(rlang)
+
+setwd("C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over")
+
+finish <- function(n = 3) {
+  for(i in 1:n){
+    beep(1)
+    Sys.sleep(0.5)
+  }
+  beep(5)
+}
+
+options(scipen = 999)
+```
+
+#CHECKPOINT
+```{r SAVE and LOAD: Workspace - }
+#Only the data tables are loaded using this workspace. All functions needed to generate these are not loaded.
+
+save.image("C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Paper_3_Workspace.RData")
+
+load("C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Paper_3_Workspace.RData")
+
+```
+
+```{r LCOE Function}
+library(FinancialMath)
+
+LCOE <- function(CAPEX, OPEX, ann.energy, r, life, lag = 0) { #MEUR, MEUR/yr, MJ,  rate, lifetime 
+  Inv <- CAPEX*1000000 #EUR
+  Ann.V <- rep(1000000*OPEX,times = life) #EUR/yr
+  if(lag != 0) { #investment realized in year 0, and opex begins at start of life
+    CF <- c(Inv, rep(0,times = lag), Ann.V)
+  } else {CF <- c(Inv,Ann.V)}
+  times.V <- 0:(life + lag)
+  NPV.CF <- sum(CF/(1+r)^times.V) #NPV in EUR
+  
+  if(ann.energy == FALSE) { #use this function to just calculate Net present cost
+    LCOE <- round(NPV.CF,2) 
+  } else {
+    Ann.E <- c(rep(0, times = lag),rep(ann.energy, times = life)) 
+    CF.E <- c(0,Ann.E)
+    NPV.E <- sum(CF.E/(1+r)^times.V) #NPV in input unit
+    
+    LCOE <- round(NPV.CF/NPV.E,2)
+  }
+  
+  
+  return(LCOE) #returns value in EUR/(input unit)
+}
+```
+
+```{r Calculate Curtailment Value, fig.width= 10, fig.asp= 0.5}
+Curtailment <- function(plant.MW, cf, EUR.MWh = 60, lt = 20, dr = 0.05) {
+  C.rate <- seq(1,8, by = 1) #percent of curtailed energy per year
+  Gross.NRG <- plant.MW*8760*cf #in MWh/year
+  C.NRG <- Gross.NRG*C.rate #in MWh/year of curtailed energy
+  C.EUR <- C.NRG*EUR.MWh #in EUR/year value of curtailed energy
+  
+  C.NPV <- mapply(LCOE, CAPEX = 0, OPEX = C.EUR/1000000, ann.energy = FALSE, r = dr, life = lt)/1000000 #in MEUR over lifetime
+  
+  DF <- data.frame(Curtailment_Rate = C.rate, 
+                   Curtailed_MWh = C.NRG,
+                   Curtailed_MEUR = C.EUR/1000000,
+                   Curtailed_NPV_MEUR = C.NPV)
+  return(DF)
+}
+
+#Offshore wind typical
+C.results <- Curtailment(1000,0.5,35, dr = 0.05)
+
+# barplot(x = C.results$Curtailment_Rate, y = C.results$Curtailed_NPV_MEUR)
+
+ggplot(data = C.results, aes(x = Curtailment_Rate, y = Curtailed_NPV_MEUR)) + 
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(x = "Curtailment Rate [%]", y = "20-year NPV of Foregone Revenues [MEUR]") +
+  theme(axis.text = element_text(size = 15)) +
+  theme(axis.title = element_text (size = 15))
+
+```
+
+
+```{r Load datasets of existing projects}
+Project_depths <- c()
+Project_distances <- c()
+Project_size <- c()
+
+```
+
+```{r Assumptions}
+OSW.Cap.Factor <- 0.4 #Capacity factor
+Disc.R <- 0.08 #discount rate
+MJ_kWh <- 0.2778 #megajoules per kWh
+MJ_kgH2 <- 120 #megajoules per kilogram H2
+
+```
+
+```{r Topology A: HVDC cable to shore}
+Topology_A <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, r = 0.08, life = 25, curtailment = 0.05, interconnection = 3) { #Follows Van Wingerden et al. (2023)
+  ### Price of Energy (Assume it's just bought from a plant)
+  Elec.Price <- EL.price #EUR/MWh. From IEA (2019) figure 7. 70% of the blue bar to exclude transmission
+  
+  ### Offshore Substation Platform
+  Platform.Inv <- 110000*plant.MW #EUR
+  Platform.OPEX.pct <- 0.005 #% of investment
+  Platform.OPEX.ann <- Platform.Inv*Platform.OPEX.pct #EUR/year
+  
+  ### Offshore substation (cost and efficiency)
+  OSS.Inv <- 685000*plant.MW #EUR
+  OSS.OPEX.pct <- 0.023 #% of investment per year
+  OSS.OPEX.ann <- OSS.Inv*OSS.OPEX.pct ##EUR/year
+  OSS.eff.pct <- 0.98
+  
+  ### Offshore Export Cable (cost and efficiency). Uses Xiang cable data
+  HVDC.Cab = copy(HVDC.Cables)
+  HVDC.Cab[ , N.Sets := ceiling(plant.MW/Circ.Capability.MW)]
+  HVDC.Cab[ , Cab.CAPEX := Cost.EURMW_km * dist.km * plant.MW] #Returns value in EUR
+  HVDC.Cab[ , Cab.EFF := mapply(HVDC.Eff, dist.km, plant.MW, .(Voltage.kV),.(Resistance.Ohkm),.(N.Sets))]
+  
+  Cab.Inv <- mean(HVDC.Cab$Cab.CAPEX, na.rm = TRUE) #mean of the results from the cables. in EUR
+  Cab.OPEX.pct <- 0.03 #% of investment per year
+  Cab.OPEX.ann <- Cab.Inv*Cab.OPEX.pct  ##EUR/year
+  Cab.eff.pct <- mean(HVDC.Cab$Cab.EFF, na.rm = TRUE)
+  
+  ### Onshore Substation
+  NSS.Inv <- 200000*plant.MW #EUR
+  NSS.OPEX.pct <- 0.015 
+  NSS.OPEX.ann <- NSS.Inv*NSS.OPEX.pct ##EUR/year
+  NSS.eff.pct <- 0.98
+  
+  
+  Trans.MEUR_km <- ((Cab.Inv + NSS.Inv + OSS.Inv)/1000000)/dist.km #MEUR/km
+  
+  #Sums
+  Total.Inv <- (Platform.Inv + OSS.Inv + NSS.Inv + Cab.Inv)/1000000 #MEUR
+  Ann.OPEX <- (Platform.OPEX.ann + OSS.OPEX.ann + Cab.OPEX.ann + NSS.OPEX.ann)/1000000 #MEUR/year
+  Tot.Eff <- OSS.eff.pct*Cab.eff.pct*NSS.eff.pct #percent
+  Gross.NRG <- plant.MW*8760*cf #MWh/year of energy generated by OSW array
+  Curt.NRG <- Gross.NRG*curtailment #MWh/year of curtailed energy
+  Net.NRG <- (Gross.NRG - Curt.NRG)*Tot.Eff #MWh/year of energy delivered tos hore
+  Net.NRG.Cost <- Gross.NRG*Elec.Price/1000000 #MEUR/year, assuming we are paying for the electricity generated by the array
+  Tot.OPEX <- Ann.OPEX + Net.NRG.Cost #MEUR/year
+  
+  Levelized.Cost <- LCOE(Total.Inv, Tot.OPEX, Net.NRG, r, life, lag = interconnection) #EUR/MWh
+  Levelized.Cost.CAPEX <- LCOE(Total.Inv, OPEX = 0, ann.energy = Net.NRG, r, life, lag = interconnection)
+  Levelized.Cost.OPEX <- LCOE(CAPEX = 0, OPEX = Ann.OPEX, ann.energy = Net.NRG, r, life, lag = interconnection)
+  Levelized.Cost.EL <- LCOE(CAPEX = 0, OPEX = Net.NRG.Cost, ann.energy = Net.NRG, r , life, lag = interconnection)
+  
+  return(data.frame(Investment = Total.Inv, Cable.MEUR_km = Trans.MEUR_km, OPEX = Ann.OPEX, LCOE.tot = Levelized.Cost, LCOE.CAPEX = Levelized.Cost.CAPEX, LCOE.OPEX = Levelized.Cost.OPEX, LCOE.EL = Levelized.Cost.EL, Efficiency = Tot.Eff, NRG_MWh = Net.NRG)) 
+  #in MUSD/MW; USD/MJ
+}
+
+```
+
+```{r Topology B: Offshore Electrolysis, H2 pipeline to shore}
+Topology_B <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1926000, PIPE.price = 615, r = 0.08, life = 25) { #Follows Van Wingerden et al. (2023)
+ H2.LHV <- 33.33 #kWh/kg or MWh/tonne 
+ 
+ ### Price of Energy (Assume it's just bought from a plant)
+  Elec.Price <- EL.price #EUR/MWh. From IEA (2019) figure 7. 70% of the blue bar to exclude transmission
+  
+  ### Offshore Substation Platform
+  Platform.Inv <- 110000*plant.MW #EUR
+  Platform.OPEX.pct <- 0.005 #% of investment
+  Platform.OPEX.ann <- Platform.Inv*Platform.OPEX.pct #EUR/year
+  
+  ### Offshore Electrolyzer (PEM)
+  PEM.Inv <- PEM.price*plant.MW #EUR
+  PEM.OPEX.pct <- 0.015
+  PEM.OPEX.ann <- PEM.Inv*PEM.OPEX.pct #EUR/year
+  PEM.eff.pct <- 0.643 #% LHV 
+  
+  ### Offshore Desalination. Need 
+  Desal.Inv <- 0*plant.MW #19260 #EUR. Take as 1% of the electrolyzer cost
+  Desal.OPEX.pct <- 0 #CHECK
+  Desal.OPEX.ann <- Desal.Inv*Desal.OPEX.pct #EUR/year
+  Desal.eff.pct <- 1 #CHECK
+  LCOH.Desal <- 0.04 #EUR/kgH2. ranges from 0.01 - 0.04 according to Megan Mauter email and IEA (2019) Future of Hydrogen Report.
+  
+  ### Offshore Compressor
+  Compressor.Inv <- 15000*plant.MW #EUR
+  Compressor.OPEX.pct <- 0.04
+  Compressor.OPEX.ann <- Compressor.Inv*Compressor.OPEX.pct #EUR/year
+  Compressor.eff.pct <- 0.985 #%
+  
+  ### Offshore Energy Storage (battery or fuel cell for black start). Need
+  Storage.MW <- 0 #MW of battery needed. CHECK, how to estimate this?
+  Storage.Inv <- 1000 #EUR/kW of battery needed. EIA Source for 1-hr battery pack: https://www.eia.gov/todayinenergy/detail.php?id=45596
+  Storage.Inv <- 1000*Storage.MW*Storage.Inv #EUR 
+  Storage.OPEX.pct <- 0.05 #Converted using the values from Dokhani et al. (2023)
+  Storage.OPEX.ann <- Storage.Inv*Storage.OPEX.pct #EUR/year
+  
+  ### Offshore Pipeline
+  Pipeline.Capacity <- 1000 #MW of H2
+  Pipeline.Inv <- PIPE.price*dist.km*Pipeline.Capacity #EUR
+  Pipeline.MEUR_km <- (Pipeline.Inv/1000000)/dist.km #MEUR/km
+  Pipeline.OPEX.pct <- 0.01
+  Pipeline.OPEX.ann <- Pipeline.Inv*Pipeline.OPEX.pct #EUR/year
+  Pipeline.eff.pct <- 1
+  
+  #Sums
+  Total.Inv <- (Platform.Inv + Desal.Inv + PEM.Inv + Compressor.Inv + Pipeline.Inv + Storage.Inv)/1000000 #MEUR
+  Ann.OPEX <- (Platform.OPEX.ann + Desal.OPEX.ann + PEM.OPEX.ann + Compressor.OPEX.ann + Storage.OPEX.ann + Pipeline.OPEX.ann)/1000000 #MEUR/year
+  
+  Ann.EL <- plant.MW*8760*cf #MWh/year
+  Cost.EL <- Ann.EL*Elec.Price/1000000 #MEUR/year
+  
+  Tot.OPEX <- Ann.OPEX + Cost.EL #MEUR/year
+  
+  Ann.H2.gross <- (Ann.EL/H2.LHV)*PEM.eff.pct #tonne H2/year
+  Eff.check <- (Ann.EL*1000)/(Ann.H2.gross*1000) #kWh/kg. Should be in the range of 42-73
+  Ann.H2.net <- Ann.H2.gross*(Compressor.eff.pct*Pipeline.eff.pct*Desal.eff.pct) #tonne H2/year
+  
+  Tot.Eff <- Ann.H2.net/(Ann.EL/H2.LHV) #percent. around 60-64 is expected. should not exceed the efficiency of the PEM (64%)
+  
+  Levelized.Cost <- LCOE(Total.Inv, Tot.OPEX, Ann.H2.net*1000, r, life) #EUR/kgH2
+  Levelized.Cost.CAPEX <- LCOE(Total.Inv,OPEX = 0, ann.energy = Ann.H2.net*1000, r, life) + LCOH.Desal
+  Levelized.Cost.OPEX <- LCOE(CAPEX = 0, OPEX = Ann.OPEX, ann.energy = Ann.H2.net*1000, r, life)
+  Levelized.Cost.EL <- LCOE(CAPEX = 0, OPEX = Cost.EL, ann.energy = Ann.H2.net*1000, r, life)
+  
+  return(data.frame(Investment = Total.Inv, Pipe.MEUR_km = Pipeline.MEUR_km, OPEX = Ann.OPEX, LCOE.tot = Levelized.Cost, LCOE.CAPEX = Levelized.Cost.CAPEX, LCOE.OPEX = Levelized.Cost.OPEX, LCOE.EL = Levelized.Cost.EL, Efficiency = Tot.Eff, H2_tH2 = Ann.H2.net)) 
+}
+
+```
+
+
+```{r Topology C: Offshore Electrolysis and storage, H2 ships to shore and storage}
+Topology_C <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1926000, SHIP.price = 43000000, r = 0.08, life = 25) { 
+  
+  H2.LHV <- 33.33 #kWh/kg or MWh/tonne 
+
+  ### Price of Energy (Assume it's just bought from a plant)
+  Elec.Price <- EL.price #EUR/MWh. From IEA (2019) figure 7. 70% of the blue bar to exclude transmission
+  
+  ### Offshore Substation Platform
+  Platform.Inv <- 110000*plant.MW #EUR
+  Platform.OPEX.pct <- 0.005 #% of investment
+  Platform.OPEX.ann <- Platform.Inv*Platform.OPEX.pct #EUR/year
+  
+  ### Offshore Electrolyzer (PEM)
+  PEM.Inv <- PEM.price*plant.MW #EUR
+  PEM.OPEX.pct <- 0.015
+  PEM.OPEX.ann <- PEM.Inv*PEM.OPEX.pct #EUR/year
+  PEM.eff.pct <- 0.643 #% LHV 
+  
+  ### Offshore Desalination. Need 
+  Desal.Inv <- 0*plant.MW #19260 #EUR. Take as 1% of the electrolyzer cost
+  Desal.OPEX.pct <- 0 #CHECK
+  Desal.OPEX.ann <- Desal.Inv*Desal.OPEX.pct #EUR/year
+  Desal.eff.pct <- 1 #CHECK. Not used yet
+  LCOH.Desal <- 0.04 #EUR/kgH2. ranges from 0.01 - 0.04 according to Megan Mauter email and IEA (2019) Future of Hydrogen Report.
+  
+  ### Offshore Liquefication. 
+  Liquefication.Inv <- 1300*plant.MW #EUR. 900-2000 USD/kW according to Kormer (2015)
+  Liquefication.OPEX.pct <- 0.03 #3-5% of investment according to https://link.springer.com/chapter/10.1007/978-3-030-86884-0_2
+  Liquefication.OPEX.ann <- Liquefication.Inv*Liquefication.OPEX.pct #EUR/year
+  Liquefication.eff.pct <- 0.7 #% according to Kormer (2015)
+  
+  ### Offshore Energy Storage (battery or fuel cell for black start). Need
+  ELStorage.MW <- 0 #MW of battery needed. CHECK, how to estimate this?
+  ELStorage.Inv <- 1000 #EUR/kW of battery needed. EIA Source for 1-hr battery pack: https://www.eia.gov/todayinenergy/detail.php?id=45596
+  ELStorage.Inv <- 1000*ELStorage.MW*ELStorage.Inv #EUR 
+  ELStorage.OPEX.pct <- 0.05 #Converted using the values from Dokhani et al. (2023)
+  ELStorage.OPEX.ann <- ELStorage.Inv*ELStorage.OPEX.pct #EUR/year
+  
+  ### ONE Hydrogen Ship 
+  Ship.Inv.unit <- 675000/4 #2015 EUR per tonne LH2 according to Kormer(2015)
+  Ship.Cap.unit <- 280000 #cu.m 37500 of liqefied H2 according to https://www.offshore-energy.biz/c-job-lh2-europe-present-new-liquid-hydrogen-tanker-design/
+  Ship.Cap.unit <- Ship.Cap.unit*1000/14.128/1000 #tonnes of LH2 in one ship capacity. 14.128 liter of liquid H2 = 1 kg of H2 according to http://www.uigi.com/h2_conv.html
+  Ship.Cost <- SHIP.price#Ship.Inv.unit*Ship.Cap.unit #EUR
+  Ship.OPEX.pct <- 0.025 #According to Table 6 in https://www.jstor.org/stable/resrep31019.13?seq=5
+  Ship.Speed <- 40 #km/h
+  One.trip <- dist.km/Ship.Speed/24 #days for one way trip
+  Ship.H2.cons <- 2.87*(Ship.Cap.unit/20000) #t LH2/h per ship consumed. According to Alkhaledi (2022) which gave 2.87t/h of green hydrogen consumption for a 20,000 tonne ship.
+  LH2.boiloff <- 0.003 #0.3% per day boil-off rate in storage according to Kormer (2015)
+  Ship.eff.pct <- 1 - LH2.boiloff #0.3% per day boil-off rate according to Kormer (2015)
+  
+  
+  ### Calculate number of ships and storage size.
+  # The amount of liquefied hydrogen produced per year
+  Ann.EL <- plant.MW*8760*cf #MWh/year
+  
+  Ann.H2.gas <- (Ann.EL/H2.LHV)*PEM.eff.pct #tonne H2/year
+  
+  Ann.LH2 <- Ann.H2.gas*Liquefication.eff.pct #tonne LH2/year. This is how much liquefied H2 is produced and must be brought to shore per year
+  
+  LH2.rate <- Ann.LH2/365 #tonnes LH2/day. With this number we need to either store, or transport it to shore, and maximize the amount brought to shore, while minimizing the cost. This production rate must be equal to the shipping rate to shore, which is achieved by increasing the number of ships, otherwise, we are losing LH2.
+  
+  LH2.Ship.rate <- Ship.Cap.unit/(One.trip*2) #tonnes LH2/day delivered.
+  N.ships <- ceiling(LH2.rate/LH2.Ship.rate)
+  N.tot <- Ann.LH2/Ship.Cap.unit #Total number of trips per year needed to deliver the generated LH2 to shore
+  
+  Fill.time <- Ship.Cap.unit/LH2.rate #days to fill a tank
+  
+  if(N.ships == 1) { #in this case, we would need some storage at the plant
+    t.store <- One.trip*2 + 1 #days for a ship to get back to the plant. Assumes 1 full day at port. This is how much time there would not be a ship at the plant for.
+    LH2Storage.Capacity <- LH2.rate*t.store #tonnes LH2 storage capacity needed as the one ship goes to shore and back.
+  } else{
+    LH2Storage.Capacity <- 0
+  }
+  
+  loss.per.trip <- One.trip*LH2.boiloff #tonnes LH2 lost from production until arrival to shore per trip
+  Loss.LH2 <- loss.per.trip*N.tot #tonnes LH2 lost per year from plant to shore.
+  Fuel.LH2 <- Ship.H2.cons*One.trip*N.tot #tonnes LH2 consumed per year
+  
+  
+  ### Ship CAPEX and OPEX
+  Ship.Inv <- N.ships*Ship.Cost #EUR
+  Ship.OPEX.ann <- Ship.Inv*Ship.OPEX.pct #EUR/year
+  
+  ### Offshore Liquid H2 Storage
+  LH2Storage.Cost <- 720*H2.LHV #EUR/tonne. 800-10000 2015USD/MWh according to Kormer (2015). 0.9 2015EUR = 1 2015USD
+  LH2Storage.Inv <- LH2Storage.Cost*LH2Storage.Capacity #EUR
+  LH2Storage.OPEX.pct <- 0.01 #CHECK
+  LH2Storage.OPEX.ann <- LH2Storage.Inv*LH2Storage.OPEX.pct #EUR/year
+
+  #Sums
+  Total.Inv <- (Platform.Inv + Desal.Inv + PEM.Inv + Liquefication.Inv + LH2Storage.Inv + ELStorage.Inv + Ship.Inv)/1000000 #MEUR
+  Ancillary.Inv <- (Platform.Inv + Desal.Inv + PEM.Inv + Liquefication.Inv + LH2Storage.Inv + ELStorage.Inv)/1000000 #MEUR
+  Ann.OPEX <- (Platform.OPEX.ann + Desal.OPEX.ann + PEM.OPEX.ann + Liquefication.OPEX.ann + LH2Storage.OPEX.ann + ELStorage.OPEX.ann + Ship.OPEX.ann)/1000000 #MEUR/year
+  
+  Cost.EL <- Ann.EL*Elec.Price/1000000 #MEUR/year. paying for electricity coming off the plant
+  
+  Tot.OPEX <- Ann.OPEX + Cost.EL #MEUR/year
+  
+  Eff.check <- (Ann.EL*1000)/(Ann.H2.gas*1000) #kWh/kg. Should be in the range of 42-73
+  Ann.LH2.net <- Ann.LH2 - Loss.LH2 - Fuel.LH2 #tonne H2/year
+  
+  Tot.Eff <- Ann.LH2.net/(Ann.EL/H2.LHV) #percent. around 60-64 is expected. should not exceed the efficiency of the PEM (64%)
+  
+  Levelized.Cost <- LCOE(Total.Inv, Tot.OPEX, Ann.LH2.net*1000, r, life) #EUR/kgH2
+  Levelized.Cost.CAPEX <- LCOE(Total.Inv,OPEX = 0, ann.energy = Ann.LH2.net*1000, r, life) + LCOH.Desal
+  Levelized.Cost.SHIP <- LCOE(Ship.Inv/1000000, OPEX = 0, ann.energy = Ann.LH2.net*1000, r, life)
+  Levelized.Cost.ELPLANT <- LCOE(Ancillary.Inv, OPEX = 0, ann.energy = Ann.LH2.net*1000, r, life)
+  Levelized.Cost.OPEX <- LCOE(CAPEX = 0, OPEX = Ann.OPEX, ann.energy = Ann.LH2.net*1000, r, life)
+  Levelized.Cost.EL <- LCOE(CAPEX = 0, OPEX = Cost.EL, ann.energy = Ann.LH2.net*1000, r, life)
+  
+  return(data.frame(Investment = Total.Inv, N.Ships = N.ships, Storage_tLH2 = LH2Storage.Capacity, OPEX = Ann.OPEX, LCOE.tot = Levelized.Cost, LCOE.CAPEX = Levelized.Cost.CAPEX, LCOE.OPEX = Levelized.Cost.OPEX, LCOE.EL = Levelized.Cost.EL, Efficiency = Tot.Eff, H2_tLH2 = Ann.LH2.net)) 
+}
+
+
+```
+
+
+```{r Topology D: Offshore Electrolysis and storage, H2 ships to shore and storage - LNG powered ship - Not useful}
+Topology_D <- function(dist.km, plant.MW, cf = 0.5, r = 0.08, life = 25) { 
+  
+  H2.LHV <- 33.33 #kWh/kg or MWh/tonne 
+
+  ### Price of Energy (Assume it's just bought from a plant)
+  Elec.Price <- 35 #EUR/MWh. From IEA (2019) figure 7. 70% of the blue bar to exclude transmission
+  
+  ### Offshore Substation Platform
+  Platform.Inv <- 110000*plant.MW #EUR
+  Platform.OPEX.pct <- 0.005 #% of investment
+  Platform.OPEX.ann <- Platform.Inv*Platform.OPEX.pct #EUR/year
+  
+  ### Offshore Electrolyzer (PEM)
+  PEM.Inv <- 1926000*plant.MW #EUR
+  PEM.OPEX.pct <- 0.015
+  PEM.OPEX.ann <- PEM.Inv*PEM.OPEX.pct #EUR/year
+  PEM.eff.pct <- 0.641 #% LHV 
+  
+  ### Offshore Desalination. Need 
+  Desal.Inv <- 0*plant.MW #19260 #EUR. Take as 1% of the electrolyzer cost
+  Desal.OPEX.pct <- 0 #CHECK
+  Desal.OPEX.ann <- Desal.Inv*Desal.OPEX.pct #EUR/year
+  Desal.eff.pct <- 1 #CHECK. Not used yet
+  LCOH.Desal <- 0.01 #EUR/kgH2
+  
+  ### Offshore Liquefication. 
+  Liquefication.Inv <- 1300*plant.MW #EUR. 900-2000 USD/kW according to Kormer (2015)
+  Liquefication.OPEX.pct <- 0.03 #3-5% of investment according to https://link.springer.com/chapter/10.1007/978-3-030-86884-0_2
+  Liquefication.OPEX.ann <- Liquefication.Inv*Liquefication.OPEX.pct #EUR/year
+  Liquefication.eff.pct <- 0.7 #% according to Kormer (2015)
+  
+  ### Offshore Energy Storage (battery or fuel cell for black start). Need
+  ELStorage.MW <- 0 #MW of battery needed. CHECK, how to estimate this?
+  ELStorage.Inv <- 1000 #EUR/kW of battery needed. EIA Source for 1-hr battery pack: https://www.eia.gov/todayinenergy/detail.php?id=45596
+  ELStorage.Inv <- 1000*ELStorage.MW*ELStorage.Inv #EUR 
+  ELStorage.OPEX.pct <- 0.05 #Converted using the values from Dokhani et al. (2023)
+  ELStorage.OPEX.ann <- ELStorage.Inv*ELStorage.OPEX.pct #EUR/year
+  
+  ### ONE Hydrogen Ship 
+  Ship.Inv.unit <- 675000/4 #2015 EUR per tonne LH2 according to Kormer(2015)
+  Ship.Cap.unit <- 280000 #cu.m 37500 of liqefied H2 according to https://www.offshore-energy.biz/c-job-lh2-europe-present-new-liquid-hydrogen-tanker-design/
+  Ship.Cap.unit <- Ship.Cap.unit*1000/14.128/1000 #tonnes of LH2 in one ship capacity. 14.128 liter of liquid H2 = 1 kg of H2 according to http://www.uigi.com/h2_conv.html
+  Ship.Cost <- 43000000#Ship.Inv.unit*Ship.Cap.unit #EUR
+  Ship.OPEX.pct <- 0.025 #According to Table 6 in https://www.jstor.org/stable/resrep31019.13?seq=5
+  Ship.Speed <- 40 #km/h
+  One.trip <- dist.km/Ship.Speed/24 #days for one way trip
+  Ship.NG.cons <- 0.230/1.6 #t/km. 0.208-0.250 t/mile according to https://maritimepage.com/ship-fuel-consumption-per-mile-or-how-much-fuel-does-a-cargo-ship-use/
+  Ship.NG.cons <- Ship.NG.cons*dist.km*2 #tonnes of NG per ship per round trip
+  NG.price <- 500 #EUR/ton. 522.50-595.50 USD/ton for HSFO and VLSFO, respectively, according to https://www.freightwaves.com/news/ship-fuel-price-dynamics-in-flux-as-war-effect-wanes
+  
+  Fuel.Cost <- Ship.NG.cons*NG.price*N.tot #EUR/year
+  
+  LH2.boiloff <- 0.003 #0.3% per day boil-off rate in storage according to Kormer (2015)
+  Ship.eff.pct <- 1 - LH2.boiloff #0.3% per day boil-off rate according to Kormer (2015)
+  
+  
+  ### Calculate number of ships and storage size.
+  # The amount of liquefied hydrogen produced per year
+  Ann.EL <- plant.MW*8760*cf #MWh/year
+  
+  Ann.H2.gas <- (Ann.EL/H2.LHV)*PEM.eff.pct #tonne H2/year
+  
+  Ann.LH2 <- Ann.H2.gas*Liquefication.eff.pct #tonne LH2/year. This is how much liquefied H2 is produced and must be brought to shore per year
+  
+  LH2.rate <- Ann.LH2/365 #tonnes LH2/day. With this number we need to either store, or transport it to shore, and maximize the amount brought to shore, while minimizing the cost. This production rate must be equal to the shipping rate to shore, which is achieved by increasing the number of ships, otherwise, we are losing LH2.
+  
+  LH2.Ship.rate <- Ship.Cap.unit/(One.trip*2) #tonnes LH2/day delivered.
+  N.ships <- ceiling(LH2.rate/LH2.Ship.rate)
+  N.tot <- Ann.LH2/Ship.Cap.unit #Total number of trips per year needed to deliver the generated LH2 to shore
+  
+  Fill.time <- Ship.Cap.unit/LH2.rate #days to fill a tank
+  
+  if(N.ships == 1) { #in this case, we would need some storage at the plant
+    t.store <- One.trip*2 + 1 #days for a ship to get back to the plant. Assumes 1 full day at port. This is how much time there would not be a ship at the plant for.
+    LH2Storage.Capacity <- LH2.rate*t.store #tonnes LH2 storage capacity needed as the one ship goes to shore and back.
+  } else{
+    LH2Storage.Capacity <- 0
+  }
+  
+  loss.per.trip <- One.trip*LH2.boiloff #tonnes LH2 lost from production until arrival to shore per trip
+  Loss.LH2 <- loss.per.trip*N.tot #tonnes LH2 lost per year from plant to shore.
+  
+  ### Ship CAPEX and OPEX
+  Ship.Inv <- N.ships*Ship.Cost #EUR
+  Ship.OPEX.ann <- Ship.Inv*Ship.OPEX.pct #EUR/year
+  
+  ### Offshore Liquid H2 Storage
+  LH2Storage.Cost <- 720*H2.LHV #EUR/tonne. 800-10000 2015USD/MWh according to Kormer (2015). 0.9 2015EUR = 1 2015USD
+  LH2Storage.Inv <- LH2Storage.Cost*LH2Storage.Capacity #EUR
+  LH2Storage.OPEX.pct <- 0.01 #CHECK
+  LH2Storage.OPEX.ann <- LH2Storage.Inv*LH2Storage.OPEX.pct #EUR/year
+
+  #Sums
+  Total.Inv <- (Platform.Inv + Desal.Inv + PEM.Inv + Liquefication.Inv + LH2Storage.Inv + ELStorage.Inv + Ship.Inv)/1000000 #MEUR
+  Ancillary.Inv <- (Platform.Inv + Desal.Inv + PEM.Inv + Liquefication.Inv + LH2Storage.Inv + ELStorage.Inv)/1000000 #MEUR
+  Ann.OPEX <- (Platform.OPEX.ann + Desal.OPEX.ann + PEM.OPEX.ann + Liquefication.OPEX.ann + LH2Storage.OPEX.ann + ELStorage.OPEX.ann + Ship.OPEX.ann + Fuel.Cost)/1000000 #MEUR/year
+  
+  Cost.EL <- Ann.EL*Elec.Price/1000000 #MEUR/year. paying for electricity coming off the plant
+  
+  Tot.OPEX <- Ann.OPEX + Cost.EL #MEUR/year
+  
+  Eff.check <- (Ann.EL*1000)/(Ann.H2.gas*1000) #kWh/kg. Should be in the range of 42-73
+  Ann.LH2.net <- Ann.LH2 - Loss.LH2 #tonne H2/year
+  
+  Tot.Eff <- Ann.LH2.net/(Ann.EL/H2.LHV) #percent. around 60-64 is expected. should not exceed the efficiency of the PEM (64%)
+  
+  Levelized.Cost <- LCOE(Total.Inv, Tot.OPEX, Ann.LH2.net*1000, r, life) #EUR/kgH2
+  Levelized.Cost.CAPEX <- LCOE(Total.Inv,OPEX = 0, ann.energy = Ann.LH2.net*1000, r, life) + LCOH.Desal
+  Levelized.Cost.SHIP <- LCOE(Ship.Inv/1000000, OPEX = 0, ann.energy = Ann.LH2.net*1000, r, life)
+  Levelized.Cost.ELPLANT <- LCOE(Ancillary.Inv, OPEX = 0, ann.energy = Ann.LH2.net*1000, r, life)
+  Levelized.Cost.OPEX <- LCOE(CAPEX = 0, OPEX = Ann.OPEX, ann.energy = Ann.LH2.net*1000, r, life)
+  Levelized.Cost.EL <- LCOE(CAPEX = 0, OPEX = Cost.EL, ann.energy = Ann.LH2.net*1000, r, life)
+  
+  return(data.frame(Investment = Total.Inv, N.Ships = N.ships, Storage_tLH2 = LH2Storage.Capacity, OPEX = Ann.OPEX, LCOE.tot = Levelized.Cost, LCOE.CAPEX = Levelized.Cost.CAPEX, LCOE.OPEX = Levelized.Cost.OPEX, LCOE.EL = Levelized.Cost.EL, Efficiency = Tot.Eff, H2_tLH2 = Ann.LH2.net)) 
+}
+
+```
+
+
+```{r FUNCTIONS: Export Cable Functions - HVDC}
+###HVDC Calculations
+HVDC.Cables <- read.csv("C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Challenges - Offshore Wind/HVDC_Cable_Data.csv")
+
+HVDC.Cables <- HVDC.Cables %>%
+  rename(Voltage.kV = ï..Voltage.kV) %>%
+  mutate(Circ.Capability.MW = 4*Voltage.kV*Current.A/1000) %>% #a circuit will have two lines. CHECK THIS
+  mutate(Cost.EURkm = Cost.GBPkm*1.16) %>% #conversion as of 10/6/23
+  mutate(Cost.EURMW_km = Cost.EURkm/Circ.Capability.MW)
+HVDC.Cables <- setDT(HVDC.Cables)
+
+HVDC.Terminal.Cost <- function(S_MVA, num, Fix = Fix.HVDC, Var = Var.HVDC) {
+  offshore.SS.cost <- Fix + (1 + f_t * (num-2))*Var*S_MVA #in USD
+  onshore.SS.cost <- 0.08148*(S_MVA)*1000000*GBP.USD #in USD
+  Terminal.Cost <- offshore.SS.cost + onshore.SS.cost
+  return(Terminal.Cost/1000000) #returns value in MUSD
+  
+}
+
+#end-to-end efficiency
+HVDC.Eff <- function(l_c, S_MVA, V_cn, r_c, n_c, pf = 1, eta.off.c = 1) { #km,MVA,kV,Ohm/km,num parallel circuits
+  A <- (S_MVA*pf*eta.off.c)/V_cn^2
+  B <- (r_c * l_c)/(2*n_c)
+  eta.transmission <- 1 - (A*B)
+  return(eta.transmission) #returns a ratio value
+}
+
+#HVDC
+#note spacing comes from US DOI - Bureau of Safety and Environmental Enforcement. (2014). Offshore Wind Submarine Cable Spacing Guidance.
+HVDC.System <- function(plant.MW, dist.km, spacing = 0.06, w.cost = 1, w.eta = 0, w.area = 0) {
+  HVDC.dt = copy(HVDC.Cables) #Create a copy of the base Cables Data
+  
+  HVDC.dt[ , N.Sets := ceiling(plant.MW/Circ.Capability.MW)]
+  HVDC.dt[ , Cable.Cost.MUSD := mapply(Cable.Cost,unit.cost = .(Cost.GBPkm), dist.km, num = .(N.Sets*2))]
+  HVDC.dt[ , Terminal.Cost.MUSD := mapply(HVDC.Terminal.Cost, S_MVA=plant.MW, num = .(N.Sets))]
+  HVDC.dt[ , Total.Cost.MUSD := Cable.Cost.MUSD + Terminal.Cost.MUSD]
+  HVDC.dt[ , Eta := mapply(HVDC.Eff, dist.km, plant.MW, .(Voltage.kV),.(Resistance.Ohkm),.(N.Sets))]
+  HVDC.dt[ , Area.km2 := dist.km*(N.Sets+1)*spacing] #area of seabed buffer needed
+  HVDC.dt[ , Total.Cost.NORM := ifelse(sum(!is.na(Total.Cost.MUSD))>0, Total.Cost.MUSD/max(Total.Cost.MUSD, na.rm = TRUE),NA)]
+  HVDC.dt[ , Eta.NORM := ifelse(sum(!is.na(Eta))>0,Eta/max(Eta, na.rm = TRUE),NA)]
+  HVDC.dt[ , Area.NORM := ifelse(sum(!is.na(Area.km2))>0,Area.km2/max(Area.km2, na.rm = TRUE),NA)]
+  HVDC.dt[ , SCORE := w.cost*(1-Total.Cost.NORM) + w.eta*Eta.NORM + w.area*(1-Area.NORM)]
+
+  HVDC.dt <- HVDC.dt[order(-SCORE)]
+
+  return(HVDC.dt[1,]) #returns an ordered dataframe, so the best option is the first
+}
+
+#### Function to add HV Cable metrics
+Add.HV.System.Metrics <- function(DT, plant.size.MW, w.cost = 0.5,w.eta = 0.5, w.area = 0) { #takes the data table as an input
+
+  #Calculate HVDC Metrics for best outcome
+  HVDC.OUTPUT <- as.data.table(t(mapply(FUN = HVDC.System, dist.km = DT$Shore_dist ,plant.MW = plant.size.MW, w.cost, w.eta, w.area)))
+
+  HVDC.OUTPUT <- setDT(HVDC.OUTPUT)
+
+  DT[ , ':=' (Plant.seabed.cable.DC = unlist(HVDC.OUTPUT[ , "Area.km2"]),
+              Plant.cost.export.DC = unlist(HVDC.OUTPUT[ , "Total.Cost.MUSD"]),
+              Plant.efficiency.DC = unlist(HVDC.OUTPUT[ , "Eta"]))]
+
+  rm(HVDC.OUTPUT) #Clean up some memory
+
+  return(DT)
+}
+```
+
+```{r FUNCTIONS: Alternative Value Chain - NOT USED}
+# #Offshore Transformer Cost. Is it required for an electrolyzer?
+#Vars: kW of plant
+TR.unit.cost <- 1300*1000 #USD/MW. From Xiang et al. (2016)
+TR.platform <- 6710000 #USD/platform
+n.platforms <- 1
+
+Transformer.cost <- function(plant.size) return((TR.platform*n.platforms)+(TR.unit.cost*plant.size)) #give plant size in MW, returns value in USD
+
+#Electrolyzer Cost. Vars: kW of plant
+EL.unit.cost <- 900*1000 #USD/MW. Saba et al. (2018)
+EL.platform <- 6710000 #USD/platform. Same as the Transformer platform. SENSITIVITY ANALYSIS
+n.platforms <- 1
+#give plant size in MW
+Electrolyzer.cost <- function(plant.size) return((EL.platform*n.platforms)+(EL.unit.cost*plant.size))
+
+H2.gen <- function(electricity.MWh, kWh.kgh2 = 67) { #annual input of electricity in MWh. Source: IRENA, 2020 (Green Hydrogen cost reduction)
+  # prod.rate <- 42 #kWh/kgH2. This is the optimistic case. Pessimistic = 73
+  H2.output <- ((electricity.MWh*1000)/kWh.kgh2)/1000 #gives tH2
+  return(H2.output) #in tH2
+}
+
+#from Popov & Baldynov (2019)
+Loss.H2 <- function(dist.km, liquefaction = 0.15,loss.per.day = 0.0002, ship.speed = 35, fudge = 1.05) {
+  eff.liq <- 1-liquefaction
+  time.in.storage <- 2*dist.km/ship.speed/24 #in days. also includes storage during transport, and waiting while the ship returns from shore
+  eff.storage <- 1-(time.in.storage*loss.per.day*fudge) 
+  eff.tot <- eff.liq*eff.storage
+  return(eff.tot)
+}
+
+#Hydrogen ship cost. A lot of uncertainty on this component
+#costs are between 120M and 43M/ship. An LNG tanker is 71M/ship according to Saadi et al. (2018)
+#Alkhaledi et al. (2022) estimates $440M/ship for a 280,000m^3 ship or 20,000ton capacity. This is huge.
+#do a sensitivity analysis on this part.
+Ship.volume <- 280000 #Capacity in m^3
+Ship.mass <- 20000 #Capacity in tons
+
+Ship.unit.cost <- 440 #MUSD/ship. SENSITIVITY ANALYSIS
+H2Ship.cost <- function(n = 1) return(Ship.unit.cost*n) #in MUSD/plant
+
+```
+
+```{r FUNCTION: Run all topologies}
+Calc.Topologies <- function(PLANT = 1000, EL.P = 35, CF = 0.5, CURT = 0.05, PEM.P = 1926000, SHIP.P = 43000000, PIPE.P = 615, DISC = 0.08, LAG = 0) {
+  
+  MJ.kWh <- 3.6 #energy content of electricity
+  MJ.kgH2 <- 120 #energy content of hydrogen
+  
+  max.dist <- 2700 #kilometers. 2,700km is the distance to point Nemo, which is the farthest ocean point from any shore.
+
+  dist.V <- seq(0, max.dist, by = 100)
+  # depth.V <- seq(1, max.depth, by = 1)
+  
+  # dist.depth <- expand.grid(dist.V, max.depth.V) #long matrix form
+  Result.DF <- data.frame(distance_km = integer(),
+                          distance_factor = factor(),
+                          Topology = factor(),
+                          TopologyA_EUR.MWh = double(),
+                          TopologyB_EUR.kgH2 = double(),
+                          TopologyC_EUR.kgLH2 = double(),
+                          TopologyA_EUR.MJ = double(),
+                          TopologyB_EUR.MJ = double(),
+                          TopologyC_EUR.MJ = double(),
+                          TopologyA_LCOE.EL = double(),
+                          TopologyB_LCOE.EL = double(),
+                          TopologyC_LCOE.EL = double(),
+                          TopologyA_LCOE.CAPEX = double(),
+                          TopologyB_LCOE.CAPEX = double(),
+                          TopologyC_LCOE.CAPEX = double(),
+                          TopologyA_LCOE.OPEX = double(),
+                          TopologyB_LCOE.OPEX = double(),
+                          TopologyC_LCOE.OPEX = double())
+  
+  
+  for(dist in dist.V) {
+    result.A <- Topology_A(dist.km = dist, plant.MW = PLANT, cf = CF, EL.price = EL.P, r = DISC, curtailment = CURT, interconnection = LAG)
+    result.B <- Topology_B(dist.km = dist, plant.MW = PLANT, cf = CF, EL.price = EL.P, PEM.price = PEM.P, PIPE.price = PIPE.P, r = DISC)
+    result.C <- Topology_C(dist.km = dist, plant.MW = PLANT, cf = CF, EL.price = EL.P, PEM.price = PEM.P, SHIP.price = SHIP.P, r = DISC)
+    
+    result.A.LCOE <- result.A$LCOE.tot/1000 #in EUR/kWh
+    result.B.LCOE <- result.B$LCOE.tot #in EUR/kgH2
+    result.C.LCOE <- result.C$LCOE.tot #in EUR/kgH2
+    
+    result.A.trans <- result.A.LCOE/MJ.kWh #in EUR/MJ
+    result.B.trans <- result.B.LCOE/MJ.kgH2 #in EUR/MJ
+    result.C.trans <- result.C.LCOE/MJ.kgH2 #in EUR/MJ
+    
+    result.A.LCOE.EL <- result.A$LCOE.EL/1000 #in EUR/kWh
+    result.B.LCOE.EL <- result.B$LCOE.EL #in EUR/kgH2
+    result.C.LCOE.EL <- result.C$LCOE.EL #in EUR/kgH2
+    
+    result.A.LCOE.CAPEX <- result.A$LCOE.CAPEX/1000 #in EUR/kWh
+    result.B.LCOE.CAPEX <- result.B$LCOE.CAPEX #in EUR/kgH2
+    result.C.LCOE.CAPEX <- result.C$LCOE.CAPEX #in EUR/kgH2
+    
+    result.A.LCOE.OPEX <- result.A$LCOE.OPEX/1000 #in EUR/kWh
+    result.B.LCOE.OPEX <- result.B$LCOE.OPEX #in EUR/kgH2
+    result.C.LCOE.OPEX <- result.C$LCOE.OPEX #in EUR/kgH2
+    
+    #levelized profit of energy to account for different markets between electricity and hydrogen
+    # result.A.LPOE <- result.A.LCOE - 
+    
+    
+    this.df <- data.frame(distance_km = dist,
+                          distance_factor = dist,
+                          TopologyA_EUR.kWh = result.A.LCOE,
+                          TopologyB_EUR.kgH2 = result.B.LCOE,
+                          TopologyC_EUR.kgLH2 = result.C.LCOE,
+                          TopologyA_EUR.MJ = result.A.trans,
+                          TopologyB_EUR.MJ = result.B.trans,
+                          TopologyC_EUR.MJ = result.C.trans,
+                          TopologyA_LCOE.EL = result.A.LCOE.EL,
+                          TopologyB_LCOE.EL = result.B.LCOE.EL,
+                          TopologyC_LCOE.EL = result.C.LCOE.EL,
+                          TopologyA_LCOE.CAPEX = result.A.LCOE.CAPEX,
+                          TopologyB_LCOE.CAPEX = result.B.LCOE.CAPEX,
+                          TopologyC_LCOE.CAPEX = result.C.LCOE.CAPEX,
+                          TopologyA_LCOE.OPEX = result.A.LCOE.OPEX,
+                          TopologyB_LCOE.OPEX = result.B.LCOE.OPEX,
+                          TopologyC_LCOE.OPEX = result.C.LCOE.OPEX)
+    Result.DF <- rbind(Result.DF,this.df)
+  }
+  return(Result.DF)
+}
+```
+
+```{r Results Generating}
+
+Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 3)
+Result.high <- Calc.Topologies(LAG = 8)
+Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000)
+
+```
+
+
+```{r Plot, fig.width=7}
+# plot(x = Result.DF$distance_km, y = Result.DF$TopologyB_EUR.kgH2, type = 'b', pch = 19, col = 'blue', ylim = c(0,10))
+# lines(x = Result.DF$distance_km, y = Result.DF$TopologyC_EUR.kgLH2, type = 'b', pch = 19, col = 'green')
+# abline(v = 200, col = 'red')
+MJ.kWh <- 3.6 #energy content of electricity
+MJ.kgH2 <- 120 #energy content of hydrogen
+
+axs.ticks <- c(0,0.02,0.04,0.06,0.08,0.1)
+
+par(mar = c(5.5,12,2,2))
+plot(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'b', pch = 19, col = 'orange', ylim = c(0,0.1), las = 1, xaxs = 'i', yaxs = 'i', yaxt = 'n', xlab = "Distance from Shore [km]", ylab = "")
+lines(x = Result.mid$distance_km, y = Result.mid$TopologyB_EUR.MJ, type = 'b', pch = 17, col = 'blue')
+lines(x = Result.mid$distance_km, y = Result.mid$TopologyC_EUR.MJ, type = 'b', pch = 15, col = 'blue')
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyA_EUR.MJ,rev(Result.low$TopologyA_EUR.MJ)), 
+        col = rgb(255/255,165/255,0,0.3), border = NA)
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyB_EUR.MJ,rev(Result.low$TopologyB_EUR.MJ)), 
+        col = rgb(0,0,1,0.3), border = NA)
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyC_EUR.MJ,rev(Result.low$TopologyC_EUR.MJ)), 
+        col = rgb(0,0,1,0.3), border = NA)
+abline(v = 200, col = 'red')
+axis(side = 2, pos = 0, las = 1, at = axs.ticks, labels = axs.ticks*100) #EURcent/MJ
+axis(side = 2, pos = -375, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kWh*100, col = 'orange', col.axis = 'orange') #EURcent/kWh
+axis(side = 2, pos = -850, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kgH2, col = 'blue', col.axis = 'blue') #EUR/kgH2
+mtext("EURcent/MJ", side = 2, line = 1.75)
+mtext("EURcent/kWh", side = 2, line = 5.5, col = 'orange')
+mtext("EUR/kgH2", side = 2, line = 8.5, col = 'blue')
+legend('bottomright', legend = c("A: HVDC","B: H2 Pipelines", "C: H2 Ships"),
+       pch = c(19,17,15), col = c("orange","blue","blue"), lty = 1)
+
+
+```
+
+```{r Bar Plots}
+Bars <- filter(Result.DF, distance_km == 2000)
+```
+```{r Results Generating small plant}
+
+Result.mid <- Calc.Topologies(PLANT = 100, EL.P = 33, PEM.P = 1519000)
+Result.high <- Calc.Topologies(PLANT = 100)
+Result.low <- Calc.Topologies(PLANT = 100, EL.P = 29, PEM.P = 1198000)
+
+```
+
+
+```{r Plot, fig.width=7}
+# plot(x = Result.DF$distance_km, y = Result.DF$TopologyB_EUR.kgH2, type = 'b', pch = 19, col = 'blue', ylim = c(0,10))
+# lines(x = Result.DF$distance_km, y = Result.DF$TopologyC_EUR.kgLH2, type = 'b', pch = 19, col = 'green')
+# abline(v = 200, col = 'red')
+MJ.kWh <- 3.6 #energy content of electricity
+MJ.kgH2 <- 120 #energy content of hydrogen
+
+axs.ticks <- c(0,0.02,0.04,0.06,0.08,0.1)
+
+par(mar = c(5.5,12,2,2))
+plot(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'b', pch = 19, col = 'orange', ylim = c(0,0.1), las = 1, xaxs = 'i', yaxs = 'i', yaxt = 'n', xlab = "Distance from Shore [km]", ylab = "")
+lines(x = Result.mid$distance_km, y = Result.mid$TopologyB_EUR.MJ, type = 'b', pch = 17, col = 'blue')
+lines(x = Result.mid$distance_km, y = Result.mid$TopologyC_EUR.MJ, type = 'b', pch = 15, col = 'blue')
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyA_EUR.MJ,rev(Result.low$TopologyA_EUR.MJ)), 
+        col = rgb(255/255,165/255,0,0.3), border = NA)
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyB_EUR.MJ,rev(Result.low$TopologyB_EUR.MJ)), 
+        col = rgb(0,0,1,0.3), border = NA)
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyC_EUR.MJ,rev(Result.low$TopologyC_EUR.MJ)), 
+        col = rgb(0,0,1,0.3), border = NA)
+abline(v = 200, col = 'red')
+axis(side = 2, pos = 0, las = 1, at = axs.ticks, labels = axs.ticks*100) #EURcent/MJ
+axis(side = 2, pos = -375, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kWh*100, col = 'orange', col.axis = 'orange') #EURcent/kWh
+axis(side = 2, pos = -850, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kgH2, col = 'blue', col.axis = 'blue') #EUR/kgH2
+mtext("EURcent/MJ", side = 2, line = 1.75)
+mtext("EURcent/kWh", side = 2, line = 5.5, col = 'orange')
+mtext("EUR/kgH2", side = 2, line = 8.5, col = 'blue')
+legend('bottomright', legend = c("A: HVDC","B: H2 Pipelines", "C: H2 Ships"),
+       pch = c(19,17,15), col = c("orange","blue","blue"), lty = 1)
+
+
+```
+
+```{r Results Generating small plant}
+
+Result.mid <- Calc.Topologies(PLANT = 10000, EL.P = 33, PEM.P = 1519000)
+Result.high <- Calc.Topologies(PLANT = 10000)
+Result.low <- Calc.Topologies(PLANT = 10000, EL.P = 29, PEM.P = 1198000)
+
+```
+
+
+```{r Plot, fig.width=7}
+# plot(x = Result.DF$distance_km, y = Result.DF$TopologyB_EUR.kgH2, type = 'b', pch = 19, col = 'blue', ylim = c(0,10))
+# lines(x = Result.DF$distance_km, y = Result.DF$TopologyC_EUR.kgLH2, type = 'b', pch = 19, col = 'green')
+# abline(v = 200, col = 'red')
+MJ.kWh <- 3.6 #energy content of electricity
+MJ.kgH2 <- 120 #energy content of hydrogen
+
+axs.ticks <- c(0,0.02,0.04,0.06,0.08,0.1)
+
+par(mar = c(5.5,12,2,2))
+plot(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'b', pch = 19, col = 'orange', ylim = c(0,0.1), las = 1, xaxs = 'i', yaxs = 'i', yaxt = 'n', xlab = "Distance from Shore [km]", ylab = "")
+lines(x = Result.mid$distance_km, y = Result.mid$TopologyB_EUR.MJ, type = 'b', pch = 17, col = 'blue')
+lines(x = Result.mid$distance_km, y = Result.mid$TopologyC_EUR.MJ, type = 'b', pch = 15, col = 'blue')
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyA_EUR.MJ,rev(Result.low$TopologyA_EUR.MJ)), 
+        col = rgb(255/255,165/255,0,0.3), border = NA)
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyB_EUR.MJ,rev(Result.low$TopologyB_EUR.MJ)), 
+        col = rgb(0,0,1,0.3), border = NA)
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyC_EUR.MJ,rev(Result.low$TopologyC_EUR.MJ)), 
+        col = rgb(0,0,1,0.3), border = NA)
+abline(v = 200, col = 'red')
+axis(side = 2, pos = 0, las = 1, at = axs.ticks, labels = axs.ticks*100) #EURcent/MJ
+axis(side = 2, pos = -375, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kWh*100, col = 'orange', col.axis = 'orange') #EURcent/kWh
+axis(side = 2, pos = -850, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kgH2, col = 'blue', col.axis = 'blue') #EUR/kgH2
+mtext("EURcent/MJ", side = 2, line = 1.75)
+mtext("EURcent/kWh", side = 2, line = 5.5, col = 'orange')
+mtext("EUR/kgH2", side = 2, line = 8.5, col = 'blue')
+legend('bottomright', legend = c("A: HVDC","B: H2 Pipelines", "C: H2 Ships"),
+       pch = c(19,17,15), col = c("orange","blue","blue"), lty = 1)
+
+
+```
+
+
+
+```{r Result Wide to Long}
+Result.Long <- gather(Result.DF, Parameter, Value, TopologyA_EUR.kWh:TopologyC_LCOE.OPEX, factor_key = TRUE) %>%
+  mutate(distance_factor = as.factor(distance_km))
+
+Result.Long$Topology <- NA #gsub("[^ABC]?", "", Result.Long$Parameter) %>%
+  #as.factor()
+
+Result.Long$Component <- NA
+Result.Long$Unit <- NA
+
+for(row in 1:nrow(Result.Long)) {
+  if(Result.Long$Parameter[row] == "TopologyA_EUR.kWh") {
+    Result.Long$Topology[row] <- "A"
+    Result.Long$Component[row] <- "Overall"
+    Result.Long$Unit[row] <- "EUR/kWh"
+  }
+  if(Result.Long$Parameter[row] == "TopologyB_EUR.kgH2") {
+    Result.Long$Topology[row] <- "B"
+    Result.Long$Component[row] <- "Overall"
+    Result.Long$Unit[row] <- "EUR/kgH2"
+  }
+  if(Result.Long$Parameter[row] == "TopologyC_EUR.kgLH2") {
+    Result.Long$Topology[row] <- "C"
+    Result.Long$Component[row] <- "Overall"
+    Result.Long$Unit[row] <- "EUR/kgH2"
+  }
+  if(Result.Long$Parameter[row] == "TopologyA_EUR.MJ") {
+    Result.Long$Topology[row] <- "A"
+    Result.Long$Component[row] <- "Overall"
+    Result.Long$Unit[row] <- "EUR/MJ"
+  }
+  if(Result.Long$Parameter[row] == "TopologyB_EUR.MJ") {
+    Result.Long$Topology[row] <- "B"
+    Result.Long$Component[row] <- "Overall"
+    Result.Long$Unit[row] <- "EUR/MJ"
+  }
+  if(Result.Long$Parameter[row] == "TopologyC_EUR.MJ") {
+    Result.Long$Topology[row] <- "C"
+    Result.Long$Component[row] <- "Overall"
+    Result.Long$Unit[row] <- "EUR/MJ"
+  }
+  if(Result.Long$Parameter[row] == "TopologyA_LCOE.EL") {
+    Result.Long$Topology[row] <- "A"
+    Result.Long$Component[row] <- "Electricity"
+    Result.Long$Unit[row] <- "EUR/MJ"
+  }
+  if(Result.Long$Parameter[row] == "TopologyB_LCOE.EL") {
+    Result.Long$Topology[row] <- "B"
+    Result.Long$Component[row] <- "Electricity"
+    Result.Long$Unit[row] <- "EUR/MJ"
+  }
+  if(Result.Long$Parameter[row] == "TopologyC_LCOE.EL") {
+    Result.Long$Topology[row] <- "C"
+    Result.Long$Component[row] <- "Electricity"
+    Result.Long$Unit[row] <- "EUR/MJ"
+  }
+  if(Result.Long$Parameter[row] == "TopologyA_LCOE.CAPEX") {
+    Result.Long$Topology[row] <- "A"
+    Result.Long$Component[row] <- "CAPEX"
+    Result.Long$Unit[row] <- "EUR/MJ"
+  }
+  if(Result.Long$Parameter[row] == "TopologyB_LCOE.CAPEX") {
+    Result.Long$Topology[row] <- "B"
+    Result.Long$Component[row] <- "CAPEX"
+    Result.Long$Unit[row] <- "EUR/MJ"
+  }
+  if(Result.Long$Parameter[row] == "TopologyC_LCOE.CAPEX") {
+    Result.Long$Topology[row] <- "C"
+    Result.Long$Component[row] <- "CAPEX"
+    Result.Long$Unit[row] <- "EUR/MJ"
+  }
+  if(Result.Long$Parameter[row] == "TopologyA_LCOE.OPEX") {
+    Result.Long$Topology[row] <- "A"
+    Result.Long$Component[row] <- "OPEX"
+    Result.Long$Unit[row] <- "EUR/MJ"
+  }
+  if(Result.Long$Parameter[row] == "TopologyB_LCOE.OPEX") {
+    Result.Long$Topology[row] <- "B"
+    Result.Long$Component[row] <- "OPEX"
+    Result.Long$Unit[row] <- "EUR/MJ"
+  }
+  if(Result.Long$Parameter[row] == "TopologyC_LCOE.OPEX") {
+    Result.Long$Topology[row] <- "C"
+    Result.Long$Component[row] <- "OPEX"
+    Result.Long$Unit[row] <- "EUR/MJ"
+  }
+}
+
+Result.Long$Topology <- as.factor(Result.Long$Topology)
+Result.Long$Component <- as.factor(Result.Long$Component)
+Result.Long$Unit <- as.factor(Result.Long$Unit)
+
+Result.Long$Component <- relevel(Result.Long$Component, "OPEX")
+
+```
+
+
+```{r Bar Plot}
+Result.Long.A <- filter(Result.Long, Topology == "A", Component != "Overall", Unit == "EUR/MJ", distance_km <= 5000)
+
+test <- filter(Result.Long.A, distance_km == 500)
+Result.Long.B <- filter(Result.Long, Topology == "B", Component != "Overall", Unit == "EUR/MJ", distance_km <= 5000)
+
+Result.Long.C <- filter(Result.Long, Topology == "C", Component != "Overall", Unit == "EUR/MJ", distance_km <= 5000)
+
+ggplot(Result.Long.B, aes(fill = Component, y = Value, x = distance_km)) + 
+  geom_bar(position = "stack", stat = "identity") +
+  labs(x = "Distance to Shore [km]", y = "LCOE [euro cents/MJ]")
+
+```
+
