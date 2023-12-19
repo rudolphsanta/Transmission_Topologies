@@ -685,7 +685,7 @@ Calc.Topologies <- function(PLANT = 1000, EL.P = 35, CF = 0.5, CURT = 0.05, PEM.
 
 ```{r Results Generating}
 
-Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 3)
+Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 4)
 Result.high <- Calc.Topologies(LAG = 8)
 Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000)
 
@@ -705,6 +705,7 @@ par(mar = c(5.5,12,2,2))
 plot(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'b', pch = 19, col = 'orange', ylim = c(0,0.1), las = 1, xaxs = 'i', yaxs = 'i', yaxt = 'n', xlab = "Distance from Shore [km]", ylab = "")
 lines(x = Result.mid$distance_km, y = Result.mid$TopologyB_EUR.MJ, type = 'b', pch = 17, col = 'blue')
 lines(x = Result.mid$distance_km, y = Result.mid$TopologyC_EUR.MJ, type = 'b', pch = 15, col = 'blue')
+# lines(x = Result.high$distance_km, y = Result.high$TopologyA_EUR.MJ, type = 'l', pch = 15, col = 'orange')
 polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
         y = c(Result.high$TopologyA_EUR.MJ,rev(Result.low$TopologyA_EUR.MJ)), 
         col = rgb(255/255,165/255,0,0.3), border = NA)
@@ -726,6 +727,17 @@ legend('bottomright', legend = c("A: HVDC","B: H2 Pipelines", "C: H2 Ships"),
 
 
 ```
+```{r}
+Result.mid <- Calc.Topologies(LAG = 4)
+Result.high <- Calc.Topologies(LAG = 8)
+Result.low <- Calc.Topologies(LAG = 0)
+
+plot(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.kWh, type = 'b', pch = 19, col = 'orange', ylim = c(0,0.4), las = 1, xaxs = 'i', yaxs = 'i', xlab = "Distance from Shore [km]", ylab = "LCOE [EUR/kWh]")
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyA_EUR.kWh,rev(Result.low$TopologyA_EUR.kWh)), 
+        col = rgb(255/255,165/255,0,0.3), border = NA)
+```
+
 
 ```{r Bar Plots}
 Bars <- filter(Result.DF, distance_km == 2000)
