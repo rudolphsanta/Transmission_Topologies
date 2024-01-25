@@ -766,6 +766,7 @@ Calc.Topologies <- function(PLANT = 2000, EL.P = 35, CF = 0.5, CURT = 0.05, PEM.
 }
 ```
 
+##Topology A vs. Topology C. Topology C may benefit from shorter permitting time due to less space required
 ```{r Results Generating}
 
 Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 3)
@@ -793,7 +794,7 @@ polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
         y = c(Result.high$TopologyA_EUR.MJ,rev(Result.low$TopologyA_EUR.MJ)), 
         col = rgb(255/255,165/255,0,0.3), border = NA)
 # polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
-#         y = c(Result.high$TopologyB_EUR.MJ,rev(Result.low$TopologyB_EUR.MJ)), 
+#         y = c(Result.high$TopologyB_EUR.MJ,rev(Result.low$TopologyB_EUR.MJ)),
 #         col = rgb(0,0,1,0.3), border = NA)
 polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
         y = c(Result.high$TopologyC_EUR.MJ,rev(Result.low$TopologyC_EUR.MJ)), 
@@ -805,11 +806,61 @@ axis(side = 2, pos = -850, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kgH2, 
 mtext("EURcent/MJ", side = 2, line = 1.75)
 mtext("EURcent/kWh", side = 2, line = 5.5, col = 'orange')
 mtext("EUR/kgH2", side = 2, line = 8.5, col = 'blue')
+legend('bottomright', legend = c("A: HVDC","C: H2 Ships"),
+       pch = c(19,15), col = c("orange","blue"), lty = 1)
+
 # legend('bottomright', legend = c("A: HVDC","B: H2 Pipelines", "C: H2 Ships"),
 #        pch = c(19,17,15), col = c("orange","blue","blue"), lty = 1)
 
 
 ```
+
+##Topology A vs. Topology B. Topology B may benefit from no interconnection time
+```{r Results Generating}
+
+Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 2)
+Result.high <- Calc.Topologies(LAG = 10)
+Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0)
+
+```
+
+
+```{r Plot, fig.width=7}
+# plot(x = Result.DF$distance_km, y = Result.DF$TopologyB_EUR.kgH2, type = 'b', pch = 19, col = 'blue', ylim = c(0,10))
+# lines(x = Result.DF$distance_km, y = Result.DF$TopologyC_EUR.kgLH2, type = 'b', pch = 19, col = 'green')
+# abline(v = 200, col = 'red')
+MJ.kWh <- 3.6 #energy content of electricity
+MJ.kgH2 <- 120 #energy content of hydrogen
+
+axs.ticks <- c(0,0.02,0.04,0.06,0.08,0.1,0.12,0.14,0.16)
+
+par(mar = c(5.5,12,2,2))
+plot(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'b', pch = 19, col = 'orange', ylim = c(0,0.16), las = 1, xaxs = 'i', yaxs = 'i', yaxt = 'n', xlab = "Distance from Shore [km]", ylab = "")
+lines(x = Result.mid$distance_km, y = Result.mid$TopologyB_EUR.MJ, type = 'b', pch = 17, col = 'blue')
+# lines(x = Result.mid$distance_km, y = Result.mid$TopologyC_EUR.MJ, type = 'b', pch = 15, col = 'blue')
+# lines(x = Result.high$distance_km, y = Result.high$TopologyA_EUR.MJ, type = 'l', pch = 15, col = 'orange')
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyA_EUR.MJ,rev(Result.low$TopologyA_EUR.MJ)), 
+        col = rgb(255/255,165/255,0,0.3), border = NA)
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyB_EUR.MJ,rev(Result.low$TopologyB_EUR.MJ)),
+        col = rgb(0,0,1,0.3), border = NA)
+# polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+#         y = c(Result.high$TopologyC_EUR.MJ,rev(Result.low$TopologyC_EUR.MJ)), 
+#         col = rgb(0,0,1,0.3), border = NA)
+abline(v = 370, col = 'red')
+axis(side = 2, pos = 0, las = 1, at = axs.ticks, labels = axs.ticks*100) #EURcent/MJ
+axis(side = 2, pos = -375, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kWh*100, col = 'orange', col.axis = 'orange') #EURcent/kWh
+axis(side = 2, pos = -850, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kgH2, col = 'blue', col.axis = 'blue') #EUR/kgH2
+mtext("EURcent/MJ", side = 2, line = 1.75)
+mtext("EURcent/kWh", side = 2, line = 5.5, col = 'orange')
+mtext("EUR/kgH2", side = 2, line = 8.5, col = 'blue')
+legend('bottomright', legend = c("A: HVDC","B: H2 Pipelines"),
+       pch = c(19,17), col = c("orange","blue"), lty = 1)
+
+
+```
+
 ```{r Visual of only Topology A}
 Result.mid <- Calc.Topologies(LAG = 4)
 Result.high <- Calc.Topologies(LAG = 8)
