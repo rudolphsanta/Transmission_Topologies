@@ -166,7 +166,8 @@ Topology_A <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, r = 0.052, li
   Elec.Price <- EL.price #EUR/MWh. From IEA (2019) figure 7. 70% of the blue bar to exclude transmission
   
   ### Offshore Substation Platform
-  Platform.Inv <- 110000*plant.MW #EUR
+  # Platform.Inv <- 110000*plant.MW #EUR
+  Platform.Inv <- 5840000 #EUR/platform. Assume one platform
   Platform.OPEX.pct <- 0.005 #% of investment
   Platform.OPEX.ann <- Platform.Inv*Platform.OPEX.pct #EUR/year
   
@@ -179,10 +180,10 @@ Topology_A <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, r = 0.052, li
   ### Offshore Export Cable (cost and efficiency). Uses Xiang cable data
   HVDC.Cab = copy(HVDC.Cables)
   HVDC.Cab[ , N.Sets := ceiling(plant.MW/Circ.Capability.MW)]
-  HVDC.Cab[ , Cab.CAPEX := Cost.EURMW_km * dist.km * plant.MW] #Returns value in EUR
+  HVDC.Cab[ , Cab.CAPEX := Cost.EURMW_km * dist.km * plant.MW * N.Sets] #Returns value in EUR
   HVDC.Cab[ , Cab.EFF := mapply(HVDC.Eff, dist.km, plant.MW, .(Voltage.kV),.(Resistance.Ohkm),.(N.Sets))]
   
-  Cab.Inv <- mean(HVDC.Cab$Cab.CAPEX, na.rm = TRUE) #mean of the results from the cables. in EUR
+  Cab.Inv <- min(HVDC.Cab$Cab.CAPEX, na.rm = TRUE) #mean of the results from the cables. in EUR
   Cab.OPEX.pct <- 0.03 #% of investment per year
   Cab.OPEX.ann <- Cab.Inv*Cab.OPEX.pct  ##EUR/year
   Cab.eff.pct <- mean(HVDC.Cab$Cab.EFF, na.rm = TRUE)
@@ -218,14 +219,15 @@ Topology_A <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, r = 0.052, li
 ```
 
 ```{r Topology B: Offshore Electrolysis, H2 pipeline to shore}
-Topology_B <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1926000, PIPE.price = 615, r = 0.08, life = 25, lag = 3, CF.type = 2) { #Follows Van Wingerden et al. (2023)
+Topology_B <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1926000, PIPE.price = 615, r = 0.052, life = 25, lag = 3, CF.type = 2) { #Follows Van Wingerden et al. (2023)
  H2.LHV <- 33.33 #kWh/kg or MWh/tonne 
  
  ### Price of Energy (Assume it's just bought from a plant)
   Elec.Price <- EL.price #EUR/MWh. From IEA (2019) figure 7. 70% of the blue bar to exclude transmission
   
   ### Offshore Substation Platform
-  Platform.Inv <- 110000*plant.MW #EUR
+  # Platform.Inv <- 110000*plant.MW #EUR
+  Platform.Inv <- 5840000 #EUR/platform. Assume one platform
   Platform.OPEX.pct <- 0.005 #% of investment
   Platform.OPEX.ann <- Platform.Inv*Platform.OPEX.pct #EUR/year
   
@@ -289,7 +291,7 @@ Topology_B <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1
 ```
 
 ```{r Topology C: Offshore Electrolysis and storage, H2 ships to shore and storage}
-Topology_C <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1926000, SHIP.price = 43000000, r = 0.08, life = 25, lag = 3, CF.type = 2) { 
+Topology_C <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1926000, SHIP.price = 43000000, r = 0.052, life = 25, lag = 3, CF.type = 2) { 
   
   H2.LHV <- 33.33 #kWh/kg or MWh/tonne 
 
@@ -297,7 +299,8 @@ Topology_C <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1
   Elec.Price <- EL.price #EUR/MWh. From IEA (2019) figure 7. 70% of the blue bar to exclude transmission
   
   ### Offshore Substation Platform
-  Platform.Inv <- 110000*plant.MW #EUR
+  # Platform.Inv <- 110000*plant.MW #EUR
+  Platform.Inv <- 5840000 #EUR/platform. Assume one platform
   Platform.OPEX.pct <- 0.005 #% of investment
   Platform.OPEX.ann <- Platform.Inv*Platform.OPEX.pct #EUR/year
   
@@ -776,10 +779,6 @@ Lag.Value.4 <- function(Dist.km, Plant.MW, n = 10000) { #for randomly distribute
 }
 ```
 
-```{r}
-result <- replicate(10, Topology_A(20, 1000, curtailment = 0.05, interconnection = 0, CF.type = 3)$LCOE.tot) #calculate the LCOE n times
-```
-
 
 ```{r Results}
 RES.1 <- Lag.Value(20, 1000, 1)
@@ -789,7 +788,7 @@ RES.4 <- Lag.Value.4(20, 1000, n = 100)
 ```
 
 ```{r VISUALIZE Lag}
-plot(x = RES.2$lag.years, y = RES.2$LCOE, pch = 19, type = 'b', xlim = c(0,15), ylim = c(60,80),
+plot(x = RES.2$lag.years, y = RES.2$LCOE, pch = 19, type = 'b', xlim = c(0,15), ylim = c(50,80),
      xlab = "Years of development", ylab = "LCOE [EUR/MWh]",
      las = 1, xaxs = 'i', yaxs = 'i')
 points(x = RES.1$lag.years, y = RES.1$LCOE, pch = 19, type = 'b', col = 'blue')
@@ -808,6 +807,9 @@ mean.2 <- mean(RES.2$LCOE.diff, na.rm = TRUE)
 mean.3 <- mean(RES.3$LCOE.diff, na.rm = TRUE)
 mean.4 <- mean(RES.4$LCOE.diff, na.rm = TRUE)
 ```
+
+
+
 ```{r SENSITIVITY ANALYSIS ON discount rate, years of lag, project size, distance to shore, electricity cost, ITC}
 
 Baseline <- Topology_A(dist.km = 20, 
@@ -985,7 +987,7 @@ Policy.LAG <- Topology_A(dist.km = 20,
 ```{r Results Generating}
 
 Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 3, CURT = 0.1)
-Result.high <- Calc.Topologies(LAG = 20, CURT = 0.20)
+Result.high <- Calc.Topologies(LAG = 5, CURT = 0.3)
 Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0)
 
 ```
