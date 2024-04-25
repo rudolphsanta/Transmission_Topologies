@@ -144,22 +144,6 @@ ggplot(data = C.results, aes(x = Curtailment_Rate, y = Curtailed_NPV_MEUR)) +
 
 ```
 
-
-```{r Load datasets of existing projects}
-Project_depths <- c()
-Project_distances <- c()
-Project_size <- c()
-
-```
-
-```{r Assumptions}
-OSW.Cap.Factor <- 0.4 #Capacity factor
-Disc.R <- 0.08 #discount rate
-MJ_kWh <- 0.2778 #megajoules per kWh
-MJ_kgH2 <- 120 #megajoules per kilogram H2
-
-```
-
 ```{r Topology A: HVDC cable to shore}
 Topology_A <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, r = 0.052, life = 25, curtailment = 0.05, interconnection = 3, CF.type = 2,ITC = 0) { #Follows Van Wingerden et al. (2023)
   ### Price of Energy (Assume it's just bought from a plant)
@@ -219,7 +203,7 @@ Topology_A <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, r = 0.052, li
 ```
 
 ```{r Topology B: Offshore Electrolysis, H2 pipeline to shore}
-Topology_B <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1926000, PIPE.price = 615, r = 0.052, life = 25, lag = 3, CF.type = 2) { #Follows Van Wingerden et al. (2023)
+Topology_B <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1926000, PIPE.price = 615, r = 0.052, PEM.eff = 0.642, life = 25, lag = 3, CF.type = 2) { #Follows Van Wingerden et al. (2023)
  H2.LHV <- 33.33 #kWh/kg or MWh/tonne 
  
  ### Price of Energy (Assume it's just bought from a plant)
@@ -235,7 +219,7 @@ Topology_B <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1
   PEM.Inv <- PEM.price*plant.MW #EUR
   PEM.OPEX.pct <- 0.015
   PEM.OPEX.ann <- PEM.Inv*PEM.OPEX.pct #EUR/year
-  PEM.eff.pct <- 0.643 #% LHV 
+  PEM.eff.pct <- PEM.eff #% LHV 
   
   ### Offshore Desalination. Need 
   Desal.Inv <- 0*plant.MW #19260 #EUR. Take as 1% of the electrolyzer cost
@@ -291,7 +275,7 @@ Topology_B <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1
 ```
 
 ```{r Topology C: Offshore Electrolysis and storage, H2 ships to shore and storage}
-Topology_C <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1926000, SHIP.price = 43000000, r = 0.052, life = 25, lag = 3, CF.type = 2) { 
+Topology_C <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1926000, SHIP.price = 43000000, PEM.eff = 0.642, r = 0.052, life = 25, lag = 3, CF.type = 2) { 
   
   H2.LHV <- 33.33 #kWh/kg or MWh/tonne 
 
@@ -308,7 +292,7 @@ Topology_C <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1
   PEM.Inv <- PEM.price*plant.MW #EUR
   PEM.OPEX.pct <- 0.015
   PEM.OPEX.ann <- PEM.Inv*PEM.OPEX.pct #EUR/year
-  PEM.eff.pct <- 0.643 #% LHV 
+  PEM.eff.pct <- PEM.eff #% LHV 
   
   ### Offshore Desalination. Need 
   Desal.Inv <- 0*plant.MW #19260 #EUR. Take as 1% of the electrolyzer cost
@@ -408,125 +392,6 @@ Topology_C <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, PEM.price = 1
 
 ```
 
-```{r Topology D: Offshore Electrolysis and storage, H2 ships to shore and storage - LNG powered ship - Not useful}
-Topology_D <- function(dist.km, plant.MW, cf = 0.5, r = 0.08, life = 25) { 
-  
-  H2.LHV <- 33.33 #kWh/kg or MWh/tonne 
-
-  ### Price of Energy (Assume it's just bought from a plant)
-  Elec.Price <- 35 #EUR/MWh. From IEA (2019) figure 7. 70% of the blue bar to exclude transmission
-  
-  ### Offshore Substation Platform
-  Platform.Inv <- 110000*plant.MW #EUR
-  Platform.OPEX.pct <- 0.005 #% of investment
-  Platform.OPEX.ann <- Platform.Inv*Platform.OPEX.pct #EUR/year
-  
-  ### Offshore Electrolyzer (PEM)
-  PEM.Inv <- 1926000*plant.MW #EUR
-  PEM.OPEX.pct <- 0.015
-  PEM.OPEX.ann <- PEM.Inv*PEM.OPEX.pct #EUR/year
-  PEM.eff.pct <- 0.641 #% LHV 
-  
-  ### Offshore Desalination. Need 
-  Desal.Inv <- 0*plant.MW #19260 #EUR. Take as 1% of the electrolyzer cost
-  Desal.OPEX.pct <- 0 #CHECK
-  Desal.OPEX.ann <- Desal.Inv*Desal.OPEX.pct #EUR/year
-  Desal.eff.pct <- 1 #CHECK. Not used yet
-  LCOH.Desal <- 0.01 #EUR/kgH2
-  
-  ### Offshore Liquefication. 
-  Liquefication.Inv <- 1300*plant.MW #EUR. 900-2000 USD/kW according to Kormer (2015)
-  Liquefication.OPEX.pct <- 0.03 #3-5% of investment according to https://link.springer.com/chapter/10.1007/978-3-030-86884-0_2
-  Liquefication.OPEX.ann <- Liquefication.Inv*Liquefication.OPEX.pct #EUR/year
-  Liquefication.eff.pct <- 0.7 #% according to Kormer (2015)
-  
-  ### Offshore Energy Storage (battery or fuel cell for black start). Need
-  ELStorage.MW <- 0 #MW of battery needed. CHECK, how to estimate this?
-  ELStorage.Inv <- 1000 #EUR/kW of battery needed. EIA Source for 1-hr battery pack: https://www.eia.gov/todayinenergy/detail.php?id=45596
-  ELStorage.Inv <- 1000*ELStorage.MW*ELStorage.Inv #EUR 
-  ELStorage.OPEX.pct <- 0.05 #Converted using the values from Dokhani et al. (2023)
-  ELStorage.OPEX.ann <- ELStorage.Inv*ELStorage.OPEX.pct #EUR/year
-  
-  ### ONE Hydrogen Ship 
-  Ship.Inv.unit <- 675000/4 #2015 EUR per tonne LH2 according to Kormer(2015)
-  Ship.Cap.unit <- 280000 #cu.m 37500 of liqefied H2 according to https://www.offshore-energy.biz/c-job-lh2-europe-present-new-liquid-hydrogen-tanker-design/
-  Ship.Cap.unit <- Ship.Cap.unit*1000/14.128/1000 #tonnes of LH2 in one ship capacity. 14.128 liter of liquid H2 = 1 kg of H2 according to http://www.uigi.com/h2_conv.html
-  Ship.Cost <- 43000000#Ship.Inv.unit*Ship.Cap.unit #EUR
-  Ship.OPEX.pct <- 0.025 #According to Table 6 in https://www.jstor.org/stable/resrep31019.13?seq=5
-  Ship.Speed <- 40 #km/h
-  One.trip <- dist.km/Ship.Speed/24 #days for one way trip
-  Ship.NG.cons <- 0.230/1.6 #t/km. 0.208-0.250 t/mile according to https://maritimepage.com/ship-fuel-consumption-per-mile-or-how-much-fuel-does-a-cargo-ship-use/
-  Ship.NG.cons <- Ship.NG.cons*dist.km*2 #tonnes of NG per ship per round trip
-  NG.price <- 500 #EUR/ton. 522.50-595.50 USD/ton for HSFO and VLSFO, respectively, according to https://www.freightwaves.com/news/ship-fuel-price-dynamics-in-flux-as-war-effect-wanes
-  
-  Fuel.Cost <- Ship.NG.cons*NG.price*N.tot #EUR/year
-  
-  LH2.boiloff <- 0.003 #0.3% per day boil-off rate in storage according to Kormer (2015)
-  Ship.eff.pct <- 1 - LH2.boiloff #0.3% per day boil-off rate according to Kormer (2015)
-  
-  
-  ### Calculate number of ships and storage size.
-  # The amount of liquefied hydrogen produced per year
-  Ann.EL <- plant.MW*8760*cf #MWh/year
-  
-  Ann.H2.gas <- (Ann.EL/H2.LHV)*PEM.eff.pct #tonne H2/year
-  
-  Ann.LH2 <- Ann.H2.gas*Liquefication.eff.pct #tonne LH2/year. This is how much liquefied H2 is produced and must be brought to shore per year
-  
-  LH2.rate <- Ann.LH2/365 #tonnes LH2/day. With this number we need to either store, or transport it to shore, and maximize the amount brought to shore, while minimizing the cost. This production rate must be equal to the shipping rate to shore, which is achieved by increasing the number of ships, otherwise, we are losing LH2.
-  
-  LH2.Ship.rate <- Ship.Cap.unit/(One.trip*2) #tonnes LH2/day delivered.
-  N.ships <- ceiling(LH2.rate/LH2.Ship.rate)
-  N.tot <- Ann.LH2/Ship.Cap.unit #Total number of trips per year needed to deliver the generated LH2 to shore
-  
-  Fill.time <- Ship.Cap.unit/LH2.rate #days to fill a tank
-  
-  if(N.ships == 1) { #in this case, we would need some storage at the plant
-    t.store <- One.trip*2 + 1 #days for a ship to get back to the plant. Assumes 1 full day at port. This is how much time there would not be a ship at the plant for.
-    LH2Storage.Capacity <- LH2.rate*t.store #tonnes LH2 storage capacity needed as the one ship goes to shore and back.
-  } else{
-    LH2Storage.Capacity <- 0
-  }
-  
-  loss.per.trip <- One.trip*LH2.boiloff #tonnes LH2 lost from production until arrival to shore per trip
-  Loss.LH2 <- loss.per.trip*N.tot #tonnes LH2 lost per year from plant to shore.
-  
-  ### Ship CAPEX and OPEX
-  Ship.Inv <- N.ships*Ship.Cost #EUR
-  Ship.OPEX.ann <- Ship.Inv*Ship.OPEX.pct #EUR/year
-  
-  ### Offshore Liquid H2 Storage
-  LH2Storage.Cost <- 720*H2.LHV #EUR/tonne. 800-10000 2015USD/MWh according to Kormer (2015). 0.9 2015EUR = 1 2015USD
-  LH2Storage.Inv <- LH2Storage.Cost*LH2Storage.Capacity #EUR
-  LH2Storage.OPEX.pct <- 0.01 #CHECK
-  LH2Storage.OPEX.ann <- LH2Storage.Inv*LH2Storage.OPEX.pct #EUR/year
-
-  #Sums
-  Total.Inv <- (Platform.Inv + Desal.Inv + PEM.Inv + Liquefication.Inv + LH2Storage.Inv + ELStorage.Inv + Ship.Inv)/1000000 #MEUR
-  Ancillary.Inv <- (Platform.Inv + Desal.Inv + PEM.Inv + Liquefication.Inv + LH2Storage.Inv + ELStorage.Inv)/1000000 #MEUR
-  Ann.OPEX <- (Platform.OPEX.ann + Desal.OPEX.ann + PEM.OPEX.ann + Liquefication.OPEX.ann + LH2Storage.OPEX.ann + ELStorage.OPEX.ann + Ship.OPEX.ann + Fuel.Cost)/1000000 #MEUR/year
-  
-  Cost.EL <- Ann.EL*Elec.Price/1000000 #MEUR/year. paying for electricity coming off the plant
-  
-  Tot.OPEX <- Ann.OPEX + Cost.EL #MEUR/year
-  
-  Eff.check <- (Ann.EL*1000)/(Ann.H2.gas*1000) #kWh/kg. Should be in the range of 42-73
-  Ann.LH2.net <- Ann.LH2 - Loss.LH2 #tonne H2/year
-  
-  Tot.Eff <- Ann.LH2.net/(Ann.EL/H2.LHV) #percent. around 60-64 is expected. should not exceed the efficiency of the PEM (64%)
-  
-  Levelized.Cost <- LCOE(Total.Inv, Tot.OPEX, Ann.LH2.net*1000, r, life) #EUR/kgH2
-  Levelized.Cost.CAPEX <- LCOE(Total.Inv,OPEX = 0, ann.energy = Ann.LH2.net*1000, r, life) + LCOH.Desal
-  Levelized.Cost.SHIP <- LCOE(Ship.Inv/1000000, OPEX = 0, ann.energy = Ann.LH2.net*1000, r, life)
-  Levelized.Cost.ELPLANT <- LCOE(Ancillary.Inv, OPEX = 0, ann.energy = Ann.LH2.net*1000, r, life)
-  Levelized.Cost.OPEX <- LCOE(CAPEX = 0, OPEX = Ann.OPEX, ann.energy = Ann.LH2.net*1000, r, life)
-  Levelized.Cost.EL <- LCOE(CAPEX = 0, OPEX = Cost.EL, ann.energy = Ann.LH2.net*1000, r, life)
-  
-  return(data.frame(Investment = Total.Inv, N.Ships = N.ships, Storage_tLH2 = LH2Storage.Capacity, OPEX = Ann.OPEX, LCOE.tot = Levelized.Cost, LCOE.CAPEX = Levelized.Cost.CAPEX, LCOE.OPEX = Levelized.Cost.OPEX, LCOE.EL = Levelized.Cost.EL, Efficiency = Tot.Eff, H2_tLH2 = Ann.LH2.net)) 
-}
-
-```
-
 ```{r FUNCTIONS: Export Cable Functions - HVDC}
 ###HVDC Calculations
 HVDC.Cables <- read.csv("C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Challenges - Offshore Wind/HVDC_Cable_Data.csv")
@@ -593,51 +458,8 @@ Add.HV.System.Metrics <- function(DT, plant.size.MW, w.cost = 0.5,w.eta = 0.5, w
 }
 ```
 
-```{r FUNCTIONS: Alternative Value Chain - NOT USED}
-# #Offshore Transformer Cost. Is it required for an electrolyzer?
-#Vars: kW of plant
-TR.unit.cost <- 1300*1000 #USD/MW. From Xiang et al. (2016)
-TR.platform <- 6710000 #USD/platform
-n.platforms <- 1
-
-Transformer.cost <- function(plant.size) return((TR.platform*n.platforms)+(TR.unit.cost*plant.size)) #give plant size in MW, returns value in USD
-
-#Electrolyzer Cost. Vars: kW of plant
-EL.unit.cost <- 900*1000 #USD/MW. Saba et al. (2018)
-EL.platform <- 6710000 #USD/platform. Same as the Transformer platform. SENSITIVITY ANALYSIS
-n.platforms <- 1
-#give plant size in MW
-Electrolyzer.cost <- function(plant.size) return((EL.platform*n.platforms)+(EL.unit.cost*plant.size))
-
-H2.gen <- function(electricity.MWh, kWh.kgh2 = 67) { #annual input of electricity in MWh. Source: IRENA, 2020 (Green Hydrogen cost reduction)
-  # prod.rate <- 42 #kWh/kgH2. This is the optimistic case. Pessimistic = 73
-  H2.output <- ((electricity.MWh*1000)/kWh.kgh2)/1000 #gives tH2
-  return(H2.output) #in tH2
-}
-
-#from Popov & Baldynov (2019)
-Loss.H2 <- function(dist.km, liquefaction = 0.15,loss.per.day = 0.0002, ship.speed = 35, fudge = 1.05) {
-  eff.liq <- 1-liquefaction
-  time.in.storage <- 2*dist.km/ship.speed/24 #in days. also includes storage during transport, and waiting while the ship returns from shore
-  eff.storage <- 1-(time.in.storage*loss.per.day*fudge) 
-  eff.tot <- eff.liq*eff.storage
-  return(eff.tot)
-}
-
-#Hydrogen ship cost. A lot of uncertainty on this component
-#costs are between 120M and 43M/ship. An LNG tanker is 71M/ship according to Saadi et al. (2018)
-#Alkhaledi et al. (2022) estimates $440M/ship for a 280,000m^3 ship or 20,000ton capacity. This is huge.
-#do a sensitivity analysis on this part.
-Ship.volume <- 280000 #Capacity in m^3
-Ship.mass <- 20000 #Capacity in tons
-
-Ship.unit.cost <- 440 #MUSD/ship. SENSITIVITY ANALYSIS
-H2Ship.cost <- function(n = 1) return(Ship.unit.cost*n) #in MUSD/plant
-
-```
-
 ```{r FUNCTION: Run all topologies}
-Calc.Topologies <- function(PLANT = 1000, EL.P = 33, CF = 0.5, CURT = 0.05, PEM.P = 15519000, SHIP.P = 43000000, PIPE.P = 615, DISC = 0.052, LAG = 3, CF.T = 2) {
+Calc.Topologies <- function(PLANT = 1000, EL.P = 33, CF = 0.5, CURT = 0.05, PEM.P = 1519000, SHIP.P = 43000000, PIPE.P = 615, PEM.EFF = 0.642, DISC = 0.052, LAG = 3, CF.T = 2) {
   
   MJ.kWh <- 3.6 #energy content of electricity
   MJ.kgH2 <- 120 #energy content of hydrogen
@@ -670,8 +492,8 @@ Calc.Topologies <- function(PLANT = 1000, EL.P = 33, CF = 0.5, CURT = 0.05, PEM.
   
   for(dist in dist.V) {
     result.A <- Topology_A(dist.km = dist, plant.MW = PLANT, cf = CF, EL.price = EL.P, r = DISC, curtailment = CURT, interconnection = LAG, CF.type = CF.T)
-    result.B <- Topology_B(dist.km = dist, plant.MW = PLANT, cf = CF, EL.price = EL.P, PEM.price = PEM.P, PIPE.price = PIPE.P, r = DISC, lag = LAG, CF.type = CF.T)
-    result.C <- Topology_C(dist.km = dist, plant.MW = PLANT, cf = CF, EL.price = EL.P, PEM.price = PEM.P, SHIP.price = SHIP.P, r = DISC, lag = LAG, CF.type = CF.T)
+    result.B <- Topology_B(dist.km = dist, plant.MW = PLANT, cf = CF, EL.price = EL.P, PEM.price = PEM.P, PIPE.price = PIPE.P, PEM.eff = PEM.EFF, r = DISC, lag = LAG, CF.type = CF.T)
+    result.C <- Topology_C(dist.km = dist, plant.MW = PLANT, cf = CF, EL.price = EL.P, PEM.price = PEM.P, SHIP.price = SHIP.P, PEM.eff = PEM.EFF, r = DISC, lag = LAG, CF.type = CF.T)
     
     result.A.LCOE <- result.A$LCOE.tot/1000 #in EUR/kWh
     result.B.LCOE <- result.B$LCOE.tot #in EUR/kgH2
@@ -720,23 +542,66 @@ Calc.Topologies <- function(PLANT = 1000, EL.P = 33, CF = 0.5, CURT = 0.05, PEM.
 }
 ```
 
-#Part 1
-##Examine the impact of different lag times on project economics for Topology A. What is the LCOE for 0,1,...,10 year lags?
-```{r Sandbox}
-max.dist <- 2700
-dist.V <- seq(0, max.dist, by = 100)
-Plant.MW <- 1000
-Dist.km <- 50
+```{r FUNCTION: Run all topologies, only for fixed distances to check difference between topologies}
+Calc.Topologies.Stationary <- function(PLANT = 1000, DIST = 20, EL.P = 33, CF = 0.5, CURT = 0.05, PEM.P = 1519000, SHIP.P = 43000000, PIPE.P = 615, PEM.EFF = 0.642, DISC = 0.052, LAG = 3, CF.T = 2) {
+  
+  MJ.kWh <- 3.6 #energy content of electricity
+  MJ.kgH2 <- 120 #energy content of hydrogen
+    
+  result.A <- Topology_A(dist.km = DIST, plant.MW = PLANT, cf = CF, EL.price = EL.P, r = DISC, curtailment = CURT, interconnection = LAG, CF.type = CF.T)
+  result.B <- Topology_B(dist.km = DIST, plant.MW = PLANT, cf = CF, EL.price = EL.P, PEM.price = PEM.P, PIPE.price = PIPE.P, PEM.eff = PEM.EFF, r = DISC, lag = LAG, CF.type = CF.T)
+  result.C <- Topology_C(dist.km = DIST, plant.MW = PLANT, cf = CF, EL.price = EL.P, PEM.price = PEM.P, SHIP.price = SHIP.P, PEM.eff = PEM.EFF, r = DISC, lag = LAG, CF.type = CF.T)
+  
+  result.A.LCOE <- result.A$LCOE.tot/1000 #in EUR/kWh
+  result.B.LCOE <- result.B$LCOE.tot #in EUR/kgH2
+  result.C.LCOE <- result.C$LCOE.tot #in EUR/kgH2
+    
+  result.A.trans <- result.A.LCOE/MJ.kWh #in EUR/MJ
+  result.B.trans <- result.B.LCOE/MJ.kgH2 #in EUR/MJ
+  result.C.trans <- result.C.LCOE/MJ.kgH2 #in EUR/MJ
+  
+  result.A.LCOE.EL <- result.A$LCOE.EL/1000 #in EUR/kWh
+  result.B.LCOE.EL <- result.B$LCOE.EL #in EUR/kgH2
+  result.C.LCOE.EL <- result.C$LCOE.EL #in EUR/kgH2
+  
+  result.A.LCOE.CAPEX <- result.A$LCOE.CAPEX/1000 #in EUR/kWh
+  result.B.LCOE.CAPEX <- result.B$LCOE.CAPEX #in EUR/kgH2
+  result.C.LCOE.CAPEX <- result.C$LCOE.CAPEX #in EUR/kgH2
+  
+  result.A.LCOE.OPEX <- result.A$LCOE.OPEX/1000 #in EUR/kWh
+  result.B.LCOE.OPEX <- result.B$LCOE.OPEX #in EUR/kgH2
+  result.C.LCOE.OPEX <- result.C$LCOE.OPEX #in EUR/kgH2
+  
+  #levelized profit of energy to account for different markets between electricity and hydrogen
+  # result.A.LPOE <- result.A.LCOE - 
+  
+  
+  Result.DF <- data.frame(distance_km = dist,
+                         distance_factor = dist,
+                         TopologyA_EUR.kWh = result.A.LCOE,
+                         TopologyB_EUR.kgH2 = result.B.LCOE,
+                         TopologyC_EUR.kgLH2 = result.C.LCOE,
+                         TopologyA_EUR.MJ = result.A.trans,
+                         TopologyB_EUR.MJ = result.B.trans,
+                         TopologyC_EUR.MJ = result.C.trans,
+                         TopologyA_LCOE.EL = result.A.LCOE.EL,
+                         TopologyB_LCOE.EL = result.B.LCOE.EL,
+                         TopologyC_LCOE.EL = result.C.LCOE.EL,
+                         TopologyA_LCOE.CAPEX = result.A.LCOE.CAPEX,
+                         TopologyB_LCOE.CAPEX = result.B.LCOE.CAPEX,
+                         TopologyC_LCOE.CAPEX = result.C.LCOE.CAPEX,
+                         TopologyA_LCOE.OPEX = result.A.LCOE.OPEX,
+                         TopologyB_LCOE.OPEX = result.B.LCOE.OPEX,
+                         TopologyC_LCOE.OPEX = result.C.LCOE.OPEX,
+                         DIFF.AC = result.C.trans - result.A.trans,
+                         DIFF.AB = result.B.trans - result.A.trans)
 
-# result.1 <- Topology_A(Dist.km, Plant.MW, curtailment = 0, interconnection = 5, CF.type = 1)
-# result.2 <- Topology_A(Dist.km, Plant.MW, curtailment = 0, interconnection = 5, CF.type = 2)
-# result.3 <- Topology_A(Dist.km, Plant.MW, curtailment = 0, interconnection = 0, CF.type = 3)
-# result.4 <- Topology_A(Dist.km, Plant.MW, curtailment = 0, interconnection = 5, CF.type = 4) #need to do several runs of this
-# 
-# result.DF <- bind_rows(result.1,result.2,result.3,result.4)
+  return(Result.DF)
+}
 ```
 
-
+#Part 1
+##Examine the impact of different lag times on project economics for Topology A. What is the LCOE for 0,1,...,10 year lags?
 ```{r Visual of only Topology A}
 Result.A.0 <- Calc.Topologies(LAG = 0, PLANT = 1000)
 Result.A.3 <- Calc.Topologies(LAG = 3, PLANT = 1000)
@@ -744,12 +609,15 @@ Result.A.6 <- Calc.Topologies(LAG = 6, PLANT = 1000)
 Result.A.9 <- Calc.Topologies(LAG = 9, PLANT = 1000)
 Result.A.12 <- Calc.Topologies(LAG = 12, PLANT = 1000)
 Result.A.15 <- Calc.Topologies(LAG = 15, PLANT = 1000)
+Result.A.18 <- Calc.Topologies(LAG = 18, PLANT = 1000)
 
-
-plot(x = Result.A.3$distance_km, y = Result.A.3$TopologyA_EUR.kWh, type = 'b', pch = 19, col = 'orange', ylim = c(0,0.4), las = 1, xaxs = 'i', yaxs = 'i', xlab = "Distance from Shore [km]", ylab = "LCOE [EUR/kWh]")
-polygon(x = c(Result.A.15$distance_km,rev(Result.A.15$distance_km)),
-        y = c(Result.A.15$TopologyA_EUR.kWh,rev(Result.A.0$TopologyA_EUR.kWh)), 
+plot(x = Result.A.3$distance_km, y = Result.A.3$TopologyA_EUR.kWh * 100, type = 'b', pch = 19, col = 'orange', ylim = c(0,40), las = 1, xaxs = 'i', yaxs = 'i', xlab = "Distance from Shore [km]", ylab = "LCOE [EURcent/kWh]")
+polygon(x = c(Result.A.18$distance_km,rev(Result.A.18$distance_km)),
+        y = c(Result.A.18$TopologyA_EUR.kWh*100,rev(Result.A.0$TopologyA_EUR.kWh*100)), 
         col = rgb(255/255,165/255,0,0.3), border = NA)
+abline(h = 6.6, lty = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
+abline(h = 12.9, lty = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
+# abline(v = 370, col = 'red')
 ```
 
 
@@ -788,15 +656,15 @@ RES.4 <- Lag.Value.4(20, 1000, n = 100)
 ```
 
 ```{r VISUALIZE Lag}
-plot(x = RES.2$lag.years, y = RES.2$LCOE, pch = 19, type = 'b', xlim = c(0,15), ylim = c(50,80),
+plot(x = RES.2$lag.years, y = RES.2$LCOE, pch = 19, type = 'b', xlim = c(0,15), ylim = c(55,80),
      xlab = "Years of development", ylab = "LCOE [EUR/MWh]",
      las = 1, xaxs = 'i', yaxs = 'i')
 points(x = RES.1$lag.years, y = RES.1$LCOE, pch = 19, type = 'b', col = 'blue')
 # points(x = RES.2$lag.years, y = RES.2$LCOE, pch = 19, type = 'b', col = 'green')
 points(x = RES.3$lag.years, y = RES.3$LCOE, pch = 19, type = 'b', col = 'orange')
 points(x = RES.4$lag.years, y = RES.4$LCOE, pch = 19, type = 'b', col = 'red')
-polygon(x = c(2,6,6,2), y = c(0,0,200,200), col = rgb(255/255,128/255,0,0.3), border = FALSE) #typical construction time
-polygon(x = c(5,12,12,5), y = c(0,0,200,200), col = rgb(0/255,153/255,0,0.3), border = FALSE) #typical deployment time
+polygon(x = c(2,4,4,2), y = c(0,0,200,200), col = rgb(255/255,128/255,0,0.3), border = FALSE) #typical construction time
+polygon(x = c(7,11,11,7), y = c(0,0,200,200), col = rgb(0/255,153/255,0,0.3), border = FALSE) #typical deployment time
 legend('topleft', legend = c("Worst Case", "Levelized Case","Graduated Case","Randomized Case"),
        col = c('blue','black','orange','red'), pch = 19, lty = 1, cex = 0.8)
 ```
@@ -810,8 +678,7 @@ mean.4 <- mean(RES.4$LCOE.diff, na.rm = TRUE)
 
 
 
-```{r SENSITIVITY ANALYSIS ON discount rate, years of lag, project size, distance to shore, electricity cost, ITC}
-
+```{r SENSITIVITY ANALYSIS ON Topology A: discount rate, years of lag, project size, distance to shore, electricity cost, ITC}
 Baseline <- Topology_A(dist.km = 20, 
                        plant.MW = 1000, 
                        cf = 0.52, 
@@ -820,7 +687,7 @@ Baseline <- Topology_A(dist.km = 20,
                        life = 25, 
                        curtailment = 0.05, 
                        interconnection = 10, 
-                       CF.type = 2)$LCOE.tot #in EUR/MWh. 65.29
+                       CF.type = 2)$LCOE.tot #in EUR/MWh. 61.63
 #Discount rate
 low.r <- 0.02
 high.r <- 0.1
@@ -870,7 +737,7 @@ high.y = 18
                       CF.type = 2)$LCOE.tot)
 #project size
 low.p <- 100
-high.p <- 3000
+high.p <- 2000
 
 (Low.p <- Topology_A(dist.km = 20, 
                      plant.MW = low.p, 
@@ -940,43 +807,359 @@ high.e <- 35
                       CF.type = 2)$LCOE.tot)
 
 #ITC level {percent}
+```
 
+
+```{r SENSITIVITY ANALYSIS ON Topology Difference: discount rate, years of lag, project size, distance to shore, electricity cost, PEM cost, Ship Cost, Storage cost}
+
+Baseline <- Calc.Topologies.Stationary(PLANT = 1000,
+                                       DIST = 20,
+                                       EL.P = 33,
+                                       CURT = 0.05, 
+                                       PEM.P = 1519000,
+                                       SHIP.P = 43000000,
+                                       PIPE.P = 615,
+                                       PEM.EFF = 0.642,
+                                       DISC = 0.052, 
+                                       LAG = 3, 
+                                       CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB)
+
+#Plant Size
+low.p <- 100
+high.p <- 2000
+
+(Low.p <- Calc.Topologies.Stationary(PLANT = low.p,
+                                     DIST = 20,
+                                     EL.P = 33,
+                                     CURT = 0.05, 
+                                     PEM.P = 1519000,
+                                     SHIP.P = 43000000,
+                                     PIPE.P = 615,
+                                     PEM.EFF = 0.642,
+                                     DISC = 0.052, 
+                                     LAG = 3, 
+                                     CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+(High.p <- Calc.Topologies.Stationary(PLANT = high.p,
+                                      DIST = 20,
+                                      EL.P = 33,
+                                      CURT = 0.05, 
+                                      PEM.P = 1519000,
+                                      SHIP.P = 43000000,
+                                      PIPE.P = 615,
+                                      PEM.EFF = 0.642,
+                                      DISC = 0.052, 
+                                      LAG = 3, 
+                                      CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+#Shore distance
+low.d <- 5
+high.d <- 200
+
+(Low.d <- Calc.Topologies.Stationary(PLANT = 1000,
+                                     DIST = low.d,
+                                     EL.P = 33,
+                                     CURT = 0.05, 
+                                     PEM.P = 1519000,
+                                     SHIP.P = 43000000,
+                                     PIPE.P = 615,
+                                     PEM.EFF = 0.642,
+                                     DISC = 0.052, 
+                                     LAG = 3, 
+                                     CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+(High.d <- Calc.Topologies.Stationary(PLANT = 1000,
+                                      DIST = high.d,
+                                      EL.P = 33,
+                                      CURT = 0.05, 
+                                      PEM.P = 1519000,
+                                      SHIP.P = 43000000,
+                                      PIPE.P = 615,
+                                      PEM.EFF = 0.642,
+                                      DISC = 0.052, 
+                                      LAG = 3, 
+                                      CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+#Electricity price
+low.e <- 29
+high.e <- 35
+
+(Low.e <- Calc.Topologies.Stationary(PLANT = 1000,
+                                     DIST = 20,
+                                     EL.P = low.e,
+                                     CURT = 0.05, 
+                                     PEM.P = 1519000,
+                                     SHIP.P = 43000000,
+                                     PIPE.P = 615,
+                                     PEM.EFF = 0.642,
+                                     DISC = 0.052, 
+                                     LAG = 3, 
+                                     CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+(High.e <- Calc.Topologies.Stationary(PLANT = 1000,
+                                      DIST = 20,
+                                      EL.P = high.e,
+                                      CURT = 0.05, 
+                                      PEM.P = 1519000,
+                                      SHIP.P = 43000000,
+                                      PIPE.P = 615,
+                                      PEM.EFF = 0.642,
+                                      DISC = 0.052, 
+                                      LAG = 3, 
+                                      CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+#Curtailment
+low.c <- 0.02
+high.c <- 0.3
+
+(Low.c <- Calc.Topologies.Stationary(PLANT = 1000,
+                                     DIST = 20,
+                                     EL.P = 33,
+                                     CURT = low.c, 
+                                     PEM.P = 1519000,
+                                     SHIP.P = 43000000,
+                                     PIPE.P = 615,
+                                     PEM.EFF = 0.642,
+                                     DISC = 0.052, 
+                                     LAG = 3, 
+                                     CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+(High.c <- Calc.Topologies.Stationary(PLANT = 1000,
+                                      DIST = 20,
+                                      EL.P = 33,
+                                      CURT = high.c, 
+                                      PEM.P = 1519000,
+                                      SHIP.P = 43000000,
+                                      PIPE.P = 615,
+                                      PEM.EFF = 0.642,
+                                      DISC = 0.052, 
+                                      LAG = 3, 
+                                      CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+#Electrolyzer cost
+low.p <- 1198000
+high.p <- 1926000
+
+(Low.p <- Calc.Topologies.Stationary(PLANT = 1000,
+                                     DIST = 20,
+                                     EL.P = 33,
+                                     CURT = 0.05, 
+                                     PEM.P = low.p,
+                                     SHIP.P = 43000000,
+                                     PIPE.P = 615,
+                                     PEM.EFF = 0.642,
+                                     DISC = 0.052, 
+                                     LAG = 3, 
+                                     CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+(High.p <- Calc.Topologies.Stationary(PLANT = 1000,
+                                      DIST = 20,
+                                      EL.P = 33,
+                                      CURT = 0.05, 
+                                      PEM.P = high.p,
+                                      SHIP.P = 43000000,
+                                      PIPE.P = 615,
+                                      PEM.EFF = 0.642,
+                                      DISC = 0.052, 
+                                      LAG = 3, 
+                                      CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+#Ship cost
+low.s <- 25000000
+high.s <- 80000000
+
+(Low.s <- Calc.Topologies.Stationary(PLANT = 1000,
+                                     DIST = 20,
+                                     EL.P = 33,
+                                     CURT = 0.05, 
+                                     PEM.P = 1519000,
+                                     SHIP.P = low.s,
+                                     PIPE.P = 615,
+                                     PEM.EFF = 0.642,
+                                     DISC = 0.052, 
+                                     LAG = 3, 
+                                     CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+(High.s <- Calc.Topologies.Stationary(PLANT = 1000,
+                                      DIST = 20,
+                                      EL.P = 33,
+                                      CURT = 0.05, 
+                                      PEM.P = 1519000,
+                                      SHIP.P = high.s,
+                                      PIPE.P = 615,
+                                      PEM.EFF = 0.642,
+                                      DISC = 0.052, 
+                                      LAG = 3, 
+                                      CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+#Pipe cost
+low.l <- 500
+high.l <- 700
+
+(Low.l <- Calc.Topologies.Stationary(PLANT = 1000,
+                                     DIST = 20,
+                                     EL.P = 33,
+                                     CURT = 0.05, 
+                                     PEM.P = 1519000,
+                                     SHIP.P = 43000000,
+                                     PIPE.P = low.l,
+                                     PEM.EFF = 0.642,
+                                     DISC = 0.052, 
+                                     LAG = 3, 
+                                     CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+(High.l <- Calc.Topologies.Stationary(PLANT = 1000,
+                                      DIST = 20,
+                                      EL.P = 33,
+                                      CURT = 0.05, 
+                                      PEM.P = 1519000,
+                                      SHIP.P = 43000000,
+                                      PIPE.P = high.l,
+                                      PEM.EFF = 0.642,
+                                      DISC = 0.052, 
+                                      LAG = 3, 
+                                      CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+#Electrolyzer efficiency
+low.n <- 0.62
+high.n <- 0.7
+
+(Low.n <- Calc.Topologies.Stationary(PLANT = 1000,
+                                     DIST = 20,
+                                     EL.P = 33,
+                                     CURT = 0.05, 
+                                     PEM.P = 1519000,
+                                     SHIP.P = 43000000,
+                                     PIPE.P = 615,
+                                     PEM.EFF = low.n,
+                                     DISC = 0.052, 
+                                     LAG = 3, 
+                                     CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+(High.n <- Calc.Topologies.Stationary(PLANT = 1000,
+                                      DIST = 20,
+                                      EL.P = 33,
+                                      CURT = 0.05, 
+                                      PEM.P = 1519000,
+                                      SHIP.P = 43000000,
+                                      PIPE.P = 615,
+                                      PEM.EFF = high.n,
+                                      DISC = 0.052, 
+                                      LAG = 3, 
+                                      CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+#Discount rate
+low.r <- 0.02
+high.r <- 0.1
+
+(Low.r <- Calc.Topologies.Stationary(PLANT = 1000,
+                                     DIST = 20,
+                                     EL.P = 33,
+                                     CURT = 0.05, 
+                                     PEM.P = 1519000,
+                                     SHIP.P = 43000000,
+                                     PIPE.P = 615,
+                                     PEM.EFF = 0.642,
+                                     DISC = low.r, 
+                                     LAG = 3, 
+                                     CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+(High.r <- Calc.Topologies.Stationary(PLANT = 1000,
+                                      DIST = 20,
+                                      EL.P = 33,
+                                      CURT = 0.05, 
+                                      PEM.P = 1519000,
+                                      SHIP.P = 43000000,
+                                      PIPE.P = 615,
+                                      PEM.EFF = 0.642,
+                                      DISC = high.r, 
+                                      LAG = 3, 
+                                      CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+#Years of lag
+low.y <- 3
+high.y <- 18
+
+(Low.y <- Calc.Topologies.Stationary(PLANT = 1000,
+                                     DIST = 20,
+                                     EL.P = 33,
+                                     CURT = 0.05, 
+                                     PEM.P = 1519000,
+                                     SHIP.P = 43000000,
+                                     PIPE.P = 615,
+                                     PEM.EFF = 0.642,
+                                     DISC = 0.052, 
+                                     LAG = low.y, 
+                                     CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+(High.y <- Calc.Topologies.Stationary(PLANT = 1000,
+                                      DIST = 20,
+                                      EL.P = 33,
+                                      CURT = 0.05, 
+                                      PEM.P = 1519000,
+                                      SHIP.P = 43000000,
+                                      PIPE.P = 615,
+                                      PEM.EFF = 0.642,
+                                      DISC = 0.052, 
+                                      LAG = high.y, 
+                                      CF.T = 2) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
 
 ```
 
 ```{r CALCULATE Effect of ITC vs 1 year of lag reduction}
 Policy.Base <- Topology_A(dist.km = 20, 
                           plant.MW = 1000, 
-                          cf = 0.52, 
+                          cf = 0.5, 
                           EL.price = 33, 
                           r = 0.052, 
                           life = 25, 
                           curtailment = 0.05, 
                           interconnection = 10, 
                           CF.type = 2,
-                          ITC = 0)$LCOE.tot #64.18 EUR/MWh 
+                          ITC = 0)$LCOE.tot #62.64 EUR/MWh 
 
 Policy.ITC <- Topology_A(dist.km = 20, 
                          plant.MW = 1000, 
-                         cf = 0.52, 
+                         cf = 0.5, 
                          EL.price = 33, 
                          r = 0.052, 
                          life = 25, 
                          curtailment = 0.05, 
                          interconnection = 10, 
                          CF.type = 2,
-                         ITC = 0.10)$LCOE.tot #61.88 EUR/MWh 
+                         ITC = 0.026)$LCOE.tot #62.08 EUR/MWh 
 
 Policy.LAG <- Topology_A(dist.km = 20, 
                          plant.MW = 1000, 
-                         cf = 0.52, 
+                         cf = 0.5, 
                          EL.price = 33, 
                          r = 0.052, 
                          life = 25, 
                          curtailment = 0.05, 
                          interconnection = 9, 
                          CF.type = 2,
-                         ITC = 0)$LCOE.tot #63.55 EUR/MWh. What will it cost to reduce permitting time by 1 year?
+                         ITC = 0)$LCOE.tot #62.06 EUR/MWh. What will it cost to reduce permitting time by 1 year?
 
 ```
 
@@ -986,8 +1169,8 @@ Policy.LAG <- Topology_A(dist.km = 20,
 ##Topology A vs. Topology C. Topology C may benefit from shorter permitting time due to less space required
 ```{r Results Generating}
 
-Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 3, CURT = 0.1)
-Result.high <- Calc.Topologies(LAG = 5, CURT = 0.3)
+Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, LAG = 20)
+Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 3)
 Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0)
 
 ```
@@ -1006,6 +1189,8 @@ par(mar = c(5.5,12,2,2))
 plot(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'b', pch = 19, col = 'orange', ylim = c(0,0.16), las = 1, xaxs = 'i', yaxs = 'i', yaxt = 'n', xlab = "Distance from Shore [km]", ylab = "")
 lines(x = Result.mid$distance_km, y = Result.mid$TopologyB_EUR.MJ, type = 'b', pch = 17, col = 'blue')
 lines(x = Result.mid$distance_km, y = Result.mid$TopologyC_EUR.MJ, type = 'b', pch = 15, col = 'blue')
+abline(h = 6.6/MJ.kWh, lty = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
+abline(h = 12.9/MJ.kWh, lty = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
 # lines(x = Result.high$distance_km, y = Result.high$TopologyA_EUR.MJ, type = 'l', pch = 15, col = 'orange')
 polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
         y = c(Result.high$TopologyA_EUR.MJ,rev(Result.low$TopologyA_EUR.MJ)), 
@@ -1016,6 +1201,7 @@ polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
 polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
         y = c(Result.high$TopologyC_EUR.MJ,rev(Result.low$TopologyC_EUR.MJ)), 
         col = rgb(0,0,1,0.3), border = NA)
+
 abline(v = 370, col = 'red')
 axis(side = 2, pos = 0, las = 1, at = axs.ticks, labels = axs.ticks*100) #EURcent/MJ
 axis(side = 2, pos = -375, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kWh*100, col = 'orange', col.axis = 'orange') #EURcent/kWh
@@ -1280,6 +1466,66 @@ Result.Long.C <- filter(Result.Long, Topology == "C", Component != "Overall", Un
 ggplot(Result.Long.B, aes(fill = Component, y = Value, x = distance_km)) + 
   geom_bar(position = "stack", stat = "identity") +
   labs(x = "Distance to Shore [km]", y = "LCOE [euro cents/MJ]")
+
+```
+
+#Part 3
+
+##Calculate the electrolyzer cost and efficiency needed to make Topology B and C cheaper
+
+```{r}
+max.eff <- 0.94 #maximum theoretical electrolysis efficiency [source]
+min.cost <- 13050000 #EUR/MW... 1400000 USD/MW PEM; 800000 USD/MW liquid alkaline [source]
+
+#at 200nm (370km), what is the cost of electrolyzers needed to make Topology B and C cheaper than Topology A?
+Baseline.A <- (Topology_A(dist.km = 370, plant.MW = 1000, interconnection = 3, curtailment = 0.1)$LCOE.tot/1000)/MJ.kWh
+Result.B <- (Topology_B(dist.km = 370, plant.MW = 1000, PEM.eff = 0.77, PEM.price = min.cost, lag = 3)$LCOE.tot)/MJ.kgH2
+
+Diff.BA <- Result.B - Baseline.A #the amount that LCOE from B exceeds the LCOE from A
+result.cost.B <- min.cost #initiate the resulting cost.
+
+while(Diff.BA >= 0) { #starting from the minimum theoretical cost, increase the PEM cost to find the switchover.
+  result.cost.B <- result.cost.B - 1000 #increase the PEM unit cost by 1000 EUR/MW 
+  Result.B <- Topology_B(dist.km = 370, plant.MW = 1000, PEM.eff = 0.77, PEM.price = result.cost.B, lag = 5)$LCOE.tot
+  Diff.BA <- Result.B - Baseline.A
+}
+
+#compared to C
+Result.C <- (Topology_C(dist.km = 370, plant.MW = 1000, PEM.eff = 0.77, PEM.price = min.cost, lag = 3))$LCOE.tot/MJ.kgH2
+
+Diff.CA <- Result.C - Baseline.A
+result.cost.C <- min.cost #initiate the resulting cost.
+
+while(Diff.CA >= 0) { #starting from the minimum theoretical cost, increase the PEM cost to find the switchover.
+  result.cost.C <- result.cost.C - 1000 #increase the PEM unit cost by 1000 EUR/MW 
+  Result.C <- (Topology_C(dist.km = 370, plant.MW = 1000, PEM.eff = 0.77, PEM.price = result.cost.C, lag = 3))$LCOE.tot/MJ.kgH2
+  Diff.CA <- Result.C - Baseline.A
+}
+
+#at 20km,...
+Baseline.A <- (Topology_A(dist.km = 20, plant.MW = 1000, interconnection = 3, curtailment = 0.1)$LCOE.tot/1000)/MJ.kWh
+Result.B <- (Topology_B(dist.km = 20, plant.MW = 1000, PEM.eff = 0.77, PEM.price = min.cost, lag = 3)$LCOE.tot)/MJ.kgH2
+
+Diff.BA <- Result.B - Baseline.A #the amount that LCOE from B exceeds the LCOE from A
+result.cost.B <- min.cost #initiate the resulting cost.
+
+while(Diff.BA >= 0) { #starting from the minimum theoretical cost, increase the PEM cost to find the switchover.
+  result.cost.B <- result.cost.B - 1000 #increase the PEM unit cost by 1000 EUR/MW 
+  Result.B <- Topology_B(dist.km = 20, plant.MW = 1000, PEM.eff = 0.77, PEM.price = result.cost.B, lag = 5)$LCOE.tot
+  Diff.BA <- Result.B - Baseline.A
+}
+
+#compared to C
+Result.C <- (Topology_C(dist.km = 20, plant.MW = 1000, PEM.eff = 0.77, PEM.price = min.cost, lag = 3))$LCOE.tot/MJ.kgH2
+
+Diff.CA <- Result.C - Baseline.A
+result.cost.C <- min.cost #initiate the resulting cost.
+
+while(Diff.CA >= 0) { #starting from the minimum theoretical cost, increase the PEM cost to find the switchover.
+  result.cost.C <- result.cost.C - 1000 #increase the PEM unit cost by 1000 EUR/MW 
+  Result.C <- (Topology_C(dist.km = 20, plant.MW = 1000, PEM.eff = 0.77, PEM.price = result.cost.C, lag = 3))$LCOE.tot/MJ.kgH2
+  Diff.CA <- Result.C - Baseline.A
+}
 
 ```
 
