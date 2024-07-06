@@ -28,7 +28,7 @@ library(pillar)
 library(ellipsis)
 library(rlang)
 
-setwd("C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over")
+# setwd("C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over")
 
 finish <- function(n = 3) {
   for(i in 1:n){
@@ -54,14 +54,16 @@ load("C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research
 ```{r LCOE Function}
 library(FinancialMath)
 
-LCOE <- function(CAPEX, OPEX, ann.energy, r, life, lag = 0, type = 1) { #MEUR, MEUR/yr, MJ,  rate, lifetime 
+LCOE <- function(CAPEX, OPEX, ann.energy, r, life, lag = 0, type = 1, esc = 0.03) { #MEUR, MEUR/yr, MJ,  rate, lifetime, escalation factor 
   Inv <- CAPEX*1000000 #EUR
   Ann.V <- rep(1000000*OPEX,times = life) #EUR/yr
+  escalation.factors <- (1 + esc)^(0:lag) #vector of escalation factors during building years
+  E.F <- c(escalation.factors, rep(1, times = life)) #vector of escalation factors of entire project, including operation.
   if(lag == 0) { #if no lag
     CF <- c(Inv,Ann.V)
   } else {
-    if(type == 1) {CF <- c(Inv, rep(0,times = lag), Ann.V)} #investment realized in year 0, and opex begins at start of life
-    if(type == 2) {CF <- c(rep(Inv/(lag + 1), times = lag + 1), Ann.V)} #investment realized evenly over the lag period
+    if(type == 1) {CF <- c(Inv, rep(0,times = lag), Ann.V)*E.F} #investment realized in year 0, and opex begins at start of life
+    if(type == 2) {CF <- c(rep(Inv/(lag + 1), times = lag + 1), Ann.V)*E.F} #investment realized evenly over the lag period
     if(type == 3) { #investment realized in linearly growing increments starting at 5-10% in the first year
       cf.0 <- 0.05 #5% of CAPEX in the first year. This is typically the amount needed to secure the ITC.
       tot.add <- 1 + lag #this only works if deployment time is less than 20 years, otherwise we only spend 5% every year
@@ -71,13 +73,13 @@ LCOE <- function(CAPEX, OPEX, ann.energy, r, life, lag = 0, type = 1) { #MEUR, M
       increment <- ((1-sum(CF))/sum(add.V))*add.V #additional proportion that should be added each year
       CF <- CF + increment
       if(abs(sum(CF) - 1) > 0.00001) {stop("Error in type 3 cashflow")} #problem if the sum isn't close to 1
-      else {CF <- c(CF*Inv, Ann.V)}
+      else {CF <- c(CF*Inv, Ann.V)*E.F}
     }
     if(type == 4) { #investment randomly allocated over the development years
      CF <- runif(n = lag + 1) 
      CF <- CF/(sum(CF))
      if(abs(sum(CF) - 1) > 0.00001) {stop("Error in type 4 cashflow")} #problem if the sum isn't close to 1
-     else{CF <- c(CF*Inv, Ann.V)}
+     else{CF <- c(CF*Inv, Ann.V)*E.F}
     }
     # if(type != 1 | 2 | 3 | 4) {stop("Incorrect 'type' used")}
     } 
@@ -145,7 +147,7 @@ ggplot(data = C.results, aes(x = Curtailment_Rate, y = Curtailed_NPV_MEUR)) +
 ```
 
 ```{r Topology A: HVDC cable to shore}
-Topology_A <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, r = 0.052, life = 25, curtailment = 0.05, interconnection = 3, CF.type = 2,ITC = 0) { #Follows Van Wingerden et al. (2023)
+Topology_A <- function(dist.km, plant.MW, cf = 0.5, EL.price = 35, r = 0.052, life = 25, curtailment = 0.05, interconnection = 3, CF.type = 2, ITC = 0, esc = 0.03) { #Follows Van Wingerden et al. (2023)
   ### Price of Energy (Assume it's just bought from a plant)
   Elec.Price <- EL.price #EUR/MWh. From IEA (2019) figure 7. 70% of the blue bar to exclude transmission
   
