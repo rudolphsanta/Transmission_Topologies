@@ -4,11 +4,6 @@ author: "Rudolph Santarromana"
 date: "2023-09-26"
 output: html_document
 ---
-#Notes
-```{r}
-# Figure out how to use curtailment. I applied a price for electricity, but what about the curtailment values?
-```
-
 
 #Setup
 ```{r setup, include=FALSE}
