@@ -617,13 +617,25 @@ Result.A.12 <- Calc.Topologies(LAG = 12, PLANT = 1000)
 Result.A.15 <- Calc.Topologies(LAG = 15, PLANT = 1000)
 Result.A.18 <- Calc.Topologies(LAG = 18, PLANT = 1000)
 
-plot(x = Result.A.3$distance_km, y = Result.A.3$TopologyA_EUR.kWh * 100, type = 'b', pch = 19, col = 'orange', ylim = c(0,40), las = 1, xaxs = 'i', yaxs = 'i', xlab = "Distance from Shore [km]", ylab = "LCOE [EURcent/kWh]")
+# setEPS()
+# postscript("Figure3-without.eps")
+png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Policy Manuscript/Figure3-with.png", width = 2100, height = 1200, res = 300)
+par(mar=c(5,5,2,2))
+plot(x = Result.A.3$distance_km, y = Result.A.3$TopologyA_EUR.kWh * 100, type = 'b', pch = 19, col = 'orange', ylim = c(0,40), xlim = c(0,2500), las = 1, xaxs = 'i', yaxs = 'i', xlab = "Distance from Shore [km]", ylab = "LCOE [€cent/kWh]")
 polygon(x = c(Result.A.18$distance_km,rev(Result.A.18$distance_km)),
         y = c(Result.A.18$TopologyA_EUR.kWh*100,rev(Result.A.0$TopologyA_EUR.kWh*100)), 
-        col = rgb(255/255,165/255,0,0.3), border = NA)
-abline(h = 6.6, lty = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
-abline(h = 12.9, lty = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
-# abline(v = 370, col = 'red')
+        col = rgb(255/255,165/255,0,0.3), border = 'orange')
+polygon(x = c(0,3000,3000,0), y = c(6.6,6.6,12.7,12.7), col = rgb(0/255,204/255,100/255,0.3), border = NA)
+abline(h = 6.6, lty = 2, lwd = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
+abline(h = 12.9, lty = 2, lwd = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
+text(2450,10,"Range of OSW LCOE", cex = 1.5, adj = 1)
+text(2450,39.6,"18-year lag", cex = 1.2, srt = 38, adj = 1)
+text(2450,29.2,"3-year lag", cex = 1.2, srt = 30, adj = 1)
+text(2450,23.5,"No lag", cex = 1.2, srt = 28, adj = 1)
+
+dev.off()
+
+
 ```
 
 
@@ -662,17 +674,23 @@ RES.4 <- Lag.Value.4(20, 1000, n = 100)
 ```
 
 ```{r VISUALIZE Lag}
-plot(x = RES.2$lag.years, y = RES.2$LCOE, pch = 19, type = 'b', xlim = c(0,15), ylim = c(55,80),
-     xlab = "Years of development", ylab = "LCOE [EUR/MWh]",
+png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Policy Manuscript/Figure10.png", width = 2100, height = 1200, res = 300)
+
+par(mar = c(5,5,2,2))
+
+plot(x = RES.2$lag.years, y = RES.2$LCOE, pch = 15, type = 'b', xlim = c(0,15), ylim = c(60,80),
+     xlab = "Years of development", ylab = "LCOE [EUR/MWh]", lwd = 3, cex = 1.2,
      las = 1, xaxs = 'i', yaxs = 'i')
-points(x = RES.1$lag.years, y = RES.1$LCOE, pch = 19, type = 'b', col = 'blue')
+points(x = RES.1$lag.years, y = RES.1$LCOE, pch = 19, type = 'b', col = 'darkblue', lty = 2, lwd = 3, cex = 1.2)
 # points(x = RES.2$lag.years, y = RES.2$LCOE, pch = 19, type = 'b', col = 'green')
-points(x = RES.3$lag.years, y = RES.3$LCOE, pch = 19, type = 'b', col = 'orange')
-points(x = RES.4$lag.years, y = RES.4$LCOE, pch = 19, type = 'b', col = 'red')
+points(x = RES.3$lag.years, y = RES.3$LCOE, pch = 16, type = 'b', col = 'orange', lty = 3, lwd = 3, cex = 1.2)
+points(x = RES.4$lag.years, y = RES.4$LCOE, pch = 17, type = 'b', col = 'darkred', lty = 4, lwd = 3, cex = 1.2)
 polygon(x = c(2,4,4,2), y = c(0,0,200,200), col = rgb(255/255,128/255,0,0.3), border = FALSE) #typical construction time
 polygon(x = c(7,11,11,7), y = c(0,0,200,200), col = rgb(0/255,153/255,0,0.3), border = FALSE) #typical deployment time
 legend('topleft', legend = c("Worst Case", "Levelized Case","Graduated Case","Randomized Case"),
-       col = c('blue','black','orange','red'), pch = 19, lty = 1, cex = 0.8)
+       col = c('darkblue','black','orange','darkred'), pch = c(19,15,16,17), lty = c(2,1,3,4), cex = 1)
+
+dev.off()
 ```
 
 ```{r SENSITIVITY ANALYSIS ON CF TYPE: CALCULATE mean}
@@ -1177,7 +1195,17 @@ Policy.LAG <- Topology_A(dist.km = 20,
 
 ##Topology A vs. Topology C. Topology C may benefit from shorter permitting time due to less space required
 ```{r Results Generating}
+#Figure4
+# Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, LAG = 0)
+# Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 0)
+# Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0)
 
+#Figure5
+# Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, LAG = 20)
+# Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 3)
+# Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0)
+
+#Figure6
 Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, LAG = 20, CURT = 0.35)
 Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 3, CURT = 0.1)
 Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0, CURT = 0.05)
@@ -1185,7 +1213,7 @@ Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0, CURT = 0.05)
 ```
 
 
-```{r Plot, fig.width=7}
+```{r Plot}
 # plot(x = Result.DF$distance_km, y = Result.DF$TopologyB_EUR.kgH2, type = 'b', pch = 19, col = 'blue', ylim = c(0,10))
 # lines(x = Result.DF$distance_km, y = Result.DF$TopologyC_EUR.kgLH2, type = 'b', pch = 19, col = 'green')
 # abline(v = 200, col = 'red')
@@ -1194,36 +1222,44 @@ MJ.kgH2 <- 120 #energy content of hydrogen
 
 axs.ticks <- c(0,0.02,0.04,0.06,0.08,0.1,0.12,0.14,0.16)
 
-par(mar = c(5.5,12,2,2))
-plot(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'b', pch = 19, col = 'orange', ylim = c(0,0.16), las = 1, xaxs = 'i', yaxs = 'i', yaxt = 'n', xlab = "Distance from Shore [km]", ylab = "")
+png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Policy Manuscript/Figure6.png", width = 2100, height = 1200, res = 300)
+par(mar = c(5,12,1,1))
+plot(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'n', pch = 19, col = 'orange', ylim = c(0,0.16), xlim = c(0,2500), las = 1, xaxs = 'i', yaxs = 'i', yaxt = 'n', xlab = "Distance from Shore [km]", ylab = "")
 lines(x = Result.mid$distance_km, y = Result.mid$TopologyB_EUR.MJ, type = 'b', pch = 17, col = 'blue')
 lines(x = Result.mid$distance_km, y = Result.mid$TopologyC_EUR.MJ, type = 'b', pch = 15, col = 'blue')
 abline(h = 6.6/MJ.kWh, lty = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
 abline(h = 12.9/MJ.kWh, lty = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
 # lines(x = Result.high$distance_km, y = Result.high$TopologyA_EUR.MJ, type = 'l', pch = 15, col = 'orange')
-polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
-        y = c(Result.high$TopologyA_EUR.MJ,rev(Result.low$TopologyA_EUR.MJ)), 
-        col = rgb(255/255,165/255,0,0.3), border = NA)
+
 polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
         y = c(Result.high$TopologyB_EUR.MJ,rev(Result.low$TopologyB_EUR.MJ)),
-        col = rgb(0,0,1,0.3), border = NA)
+        col = rgb(0,0,1,0.3), border = 'blue')
 polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
         y = c(Result.high$TopologyC_EUR.MJ,rev(Result.low$TopologyC_EUR.MJ)), 
-        col = rgb(0,0,1,0.3), border = NA)
-
+        col = rgb(0,0,1,0.3), border = 'blue')
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyA_EUR.MJ,rev(Result.low$TopologyA_EUR.MJ)), 
+        col = rgb(255/255,165/255,0,0.5), border = 'orange')
+lines(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'b', pch = 19, col = 'orange')
 abline(v = 370, col = 'red')
+text(375,0.10,"EEZ", adj = c(1,1),srt = 90)
 axis(side = 2, pos = 0, las = 1, at = axs.ticks, labels = axs.ticks*100) #EURcent/MJ
 axis(side = 2, pos = -375, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kWh*100, col = 'orange', col.axis = 'orange') #EURcent/kWh
 axis(side = 2, pos = -850, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kgH2, col = 'blue', col.axis = 'blue') #EUR/kgH2
-mtext("EURcent/MJ", side = 2, line = 1.75)
-mtext("EURcent/kWh", side = 2, line = 5.5, col = 'orange')
-mtext("EUR/kgH2", side = 2, line = 8.7, col = 'blue')
+mtext("€cent/MJ", side = 2, line = 1.75)
+mtext("€cent/kWh", side = 2, line = 5.9, col = 'orange')
+mtext("€/kgH2", side = 2, line = 9.9, col = 'blue')
 # legend('bottomright', legend = c("A: HVDC","C: H2 Ships"),
 #        pch = c(19,15), col = c("orange","blue"), lty = 1)
+text(2340,0.157,"35% curtail", cex = 1.2, srt = 45, adj = 1)
+text(2470,0.089,"10% curtail", cex = 1.2, srt = 29, adj = 1)
+text(2470,0.061,"5% curtail", cex = 1.2, srt = 21, adj = 1)
+
 
 legend('topleft', legend = c("A: HVDC","B: H2 Pipelines", "C: H2 Ships"),
        pch = c(19,17,15), col = c("orange","blue","blue"), lty = 1)
 
+dev.off()
 
 ```
 
@@ -1538,3 +1574,220 @@ while(Diff.CA >= 0) { #starting from the minimum theoretical cost, increase the 
 
 ```
 
+```{r Toranado Plot, fig.width=8}
+
+
+# library(ggplot2)
+# library(ggpattern)
+# library(reshape2)
+
+# Create a dataframe
+df <- data.frame(
+  Parameter = c("Discount Rate [%]", "Years of lag [years]","Distance to shore [km]","Electricity cost [€/MWh]","Project Size [MW]"),
+  Low_Input = c(-10.48,-6.97,-1.7,-5.54,0.01),
+  Low_Input_Label = c(55,59,64,60,66),
+  High_Input = c(21.12,7.98,5.99,1.07,-1.19),
+  High_Input_Label = c(87,74,72,67,65)
+)
+
+# Reshape data for ggplot
+df_long <- melt(df, id.vars = "Parameter", 
+                measure.vars = c("Low_Input", "High_Input"),
+                variable.name = "Input_Type", value.name = "Impact")
+
+# Ensure correct factor order (maintains given order)
+df_long$Parameter <- factor(df_long$Parameter, levels = rev(df$Parameter))
+
+# Assign colors and patterns
+df_long$Fill <- ifelse(df_long$Input_Type == "Low_Input", "Low Input", "High Input")  # Orange for Low, White for High
+df_long$Pattern <- ifelse(df_long$Input_Type == "Low_Input", "none", "stripe")  # Stripes only for High Input
+df_long$Pattern_Color <- ifelse(df_long$Input_Type == "Low_Input", "orange", "darkblue")  # Blue stripes for High
+
+# Add corresponding labels
+df_long$Label <- c(df$Low_Input_Label, df$High_Input_Label)
+
+# Create tornado plot
+png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Policy Manuscript/Figure7final.png", width = 2100, height = 1200, res = 300)
+
+par(mar=c(5,5,2,2))
+
+ggplot(df_long, aes(x = Impact, y = Parameter, fill = Fill, 
+                     pattern = Pattern, pattern_color = Pattern_Color)) +
+  geom_bar_pattern(stat = "identity", width = 0.5,
+                   pattern_fill = "darkblue", pattern_colour = "darkblue", pattern_density = 0.5,
+                   color = "black", size = 1) +  # Black border around all bars
+  scale_fill_manual(values = c("Low Input" = "orange", "High Input" = "white")) +  # Orange for Low, White for High
+  scale_pattern_manual(values = c("none", "stripe")) +  # Stripes only for High Input
+  scale_pattern_color_manual(values = c("orange" = "orange", "darkblue" = "darkblue")) +  # Blue stripes for High Input
+  geom_text(aes(label = Label, x = Impact + ifelse(Impact > 0, 2, -2)), 
+            hjust = ifelse(df_long$Impact > 0, 0, 1), size = 5) + 
+  geom_vline(xintercept = 0, color = "darkred", linewidth = 1.2) +
+  xlim(-15,25) + 
+  labs(title = "", x = "Change from Baseline LCOE (€/MWh)", y = "") +
+  annotate("text", x = -0.4, y = 5.5, label = "Baseline LCOE", size = 4, hjust = 1, color = "darkred") +
+  annotate("text", x = 0.4, y = 5.5, label = "= 65.8 €/MWh", size = 4, hjust = 0, color = "darkred") +
+  theme_minimal() +
+  scale_x_continuous(breaks = seq(-20, 30, 5), limits = c(-20, 30), expand = c(0,0)) +
+  theme(legend.position = "right", 
+        axis.text.y = element_text(size = 12, color = "black"),
+        axis.text.x = element_text(size = 12, color = "black"),
+        axis.line.x = element_line(color = "black", size = 1),  # Full black x-axis line
+        axis.ticks.x = element_line(color = "black", size = 1),  # Black tick marks on x-axis
+        panel.grid.major = element_blank(),  # Remove major grid lines
+        panel.grid.minor = element_blank(),  # Remove minor grid lines
+        panel.background = element_blank(),  # Remove background panel color
+        plot.background = element_blank(),  # Remove background around the plot
+        plot.margin = margin(10,10,20,10)) +
+  guides(fill = guide_legend(title = "Parameter Type",
+                             override.aes = list(
+                               fill = c("white","orange"),
+                               pattern = c("stripe","none"),
+                               pattern_fill = c("darkblue",NA),
+                               pattern_color = c("darkblue",NA),
+                               color = "black")),
+         pattern = "none") 
+
+dev.off()
+```
+
+```{r Spider Plot A vs. B}
+
+elc_cost_x <- c(-12.12,0,6.06)
+elc_cost_y <- c(-7.11,0,0.40)
+
+elcz_eff_x <- c(-3.427,0,9.034)
+elcz_eff_y <- c(3.557,0,-15.415)
+
+pipe_cost_x <- c(-18.699,0,13.821)
+pipe_cost_y <- c(0,0,1)
+
+elcz_cost_x <- c(-21.132,0,26.794)
+elcz_cost_y <- c(-18.972,0,18.972)
+
+data <- data.frame(
+  Parameter = rep(c("elc_cost", "elcz_eff", "pipe_cost", "elcz_cost"), each = 3),
+  Input_Change = c(elc_cost_x, elcz_eff_x, pipe_cost_x, elcz_cost_x),
+  Outcome_Change = c(elc_cost_y, elcz_eff_y, pipe_cost_y, elcz_cost_y)
+)
+
+png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Policy Manuscript/Figure8a.png", width = 1400, height = 1200, res = 300)
+
+par(mar=c(5,5,2,2))
+
+ggplot(data, aes(x = Input_Change, y = Outcome_Change, group = Parameter, color = Parameter, linetype = Parameter)) +
+  geom_line(size = 1.2) +  # Draw lines connecting the points
+  geom_point(size = 3) +   # Add points at each (x, y) pair
+  coord_cartesian(xlim = c(-50, 50), ylim = c(-50, 50)) +  # Set x and y limits
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 12, color = "black"),  
+    axis.text.y = element_text(size = 12, color = "black"),  
+    axis.line.x = element_line(color = "black", size = 1),  
+    axis.line.y = element_line(color = "black", size = 1),
+    axis.ticks.x = element_line(color = "black", size = 1),  
+    axis.ticks.y = element_line(color = "black", size = 1),  
+    legend.position = c(0.75, 0.15),  
+    legend.title = element_text(size = 12),  
+    legend.text = element_text(size = 10),  
+    panel.grid.major = element_blank(),  
+    panel.grid.minor = element_blank(),  
+    panel.background = element_blank(),  
+    plot.background = element_blank(),  
+    plot.margin = margin(10, 10, 20, 10),  
+    axis.title = element_text(size = 14)  
+  ) +
+  labs(
+    title = "",
+    x = "Input Parameter (% of baseline)",
+    y = "LCOE difference (% of baseline)"
+  ) +
+  geom_hline(yintercept = 0, linetype = "solid", color = "black", size = 0.5) +  
+  geom_vline(xintercept = 0, linetype = "solid", color = "black", size = 0.5) +  
+  scale_x_continuous(breaks = seq(-50, 50, 10), limits = c(-50, 50), expand = c(0, 0)) +  
+  scale_y_continuous(breaks = seq(-50, 50, 10), limits = c(-50, 50), expand = c(0, 0)) +  
+  scale_color_manual(
+    values = c("elc_cost" = "orange", "elcz_eff" = "darkblue", "pipe_cost" = "darkgreen", "elcz_cost" = "darkred"),
+    labels = c("elc_cost" = "Electricity Cost (€/MWh)", "elcz_eff" = "Electrolyzer Efficiency (%)", "pipe_cost" = "Pipeline Cost (€/MW)", "elcz_cost" = "Electrolyzer Cost (€/MW)")  # Editable legend labels
+  ) +  
+  scale_linetype_manual(
+    values = c("elc_cost" = "solid", "elcz_eff" = "dashed", "pipe_cost" = "twodash", "elcz_cost" = "dotted"),
+    labels = c("elc_cost" = "Electricity Cost (€/MWh)", "elcz_eff" = "Electrolyzer Efficiency (%)", "pipe_cost" = "Pipeline Cost (€/MW)", "elcz_cost" = "Electrolyzer Cost (€/MW)")) +
+  guides(color = guide_legend(override.aes = list(size = 3))) +
+  theme(legend.key.width = unit(1.5, "cm"),
+        legend.key.height = unit(0.4, "cm"),
+        legend.text = element_text(size = 8),
+        legend.title = element_blank())
+
+dev.off()
+```
+
+```{r Spider Plot A vs. C}
+
+elc_cost_x <- c(-12.121,0,6.061)
+elc_cost_y <- c(-7.115,0,0.395)
+
+elcz_eff_x <- c(-3.427,0,9.034)
+elcz_eff_y <- c(3.557,0,-15.415)
+
+ship_cost_x <- c(-41.860,0,86.047)
+ship_cost_y <- c(-3.077,0,0)
+
+elcz_cost_x <- c(-21.132,0,26.794)
+elcz_cost_y <- c(-18.972,0,18.972)
+
+data <- data.frame(
+  Parameter = rep(c("elc_cost", "elcz_eff", "ship_cost", "elcz_cost"), each = 3),
+  Input_Change = c(elc_cost_x, elcz_eff_x, ship_cost_x, elcz_cost_x),
+  Outcome_Change = c(elc_cost_y, elcz_eff_y, ship_cost_y, elcz_cost_y)
+)
+
+png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Policy Manuscript/Figure8b.png", width = 1400, height = 1200, res = 300)
+
+par(mar=c(5,5,2,2))
+
+ggplot(data, aes(x = Input_Change, y = Outcome_Change, group = Parameter, color = Parameter, linetype = Parameter)) +
+  geom_line(size = 1.2) +  # Draw lines connecting the points
+  geom_point(size = 3) +   # Add points at each (x, y) pair
+  coord_cartesian(xlim = c(-50, 50), ylim = c(-50, 50)) +  # Set x and y limits
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 12, color = "black"),  
+    axis.text.y = element_text(size = 12, color = "black"),  
+    axis.line.x = element_line(color = "black", size = 1),  
+    axis.line.y = element_line(color = "black", size = 1),
+    axis.ticks.x = element_line(color = "black", size = 1),  
+    axis.ticks.y = element_line(color = "black", size = 1),  
+    legend.position = c(0.75, 0.15),  
+    legend.title = element_text(size = 12),  
+    legend.text = element_text(size = 10),  
+    panel.grid.major = element_blank(),  
+    panel.grid.minor = element_blank(),  
+    panel.background = element_blank(),  
+    plot.background = element_blank(),  
+    plot.margin = margin(10, 10, 20, 10),  
+    axis.title = element_text(size = 14)  
+  ) +
+  labs(
+    title = "",
+    x = "Input Parameter (% of baseline)",
+    y = "LCOE difference (% of baseline)"
+  ) +
+  geom_hline(yintercept = 0, linetype = "solid", color = "black", size = 0.5) +  
+  geom_vline(xintercept = 0, linetype = "solid", color = "black", size = 0.5) +  
+  scale_x_continuous(breaks = seq(-50, 50, 10), limits = c(-100, 100), expand = c(0, 0)) +  
+  scale_y_continuous(breaks = seq(-50, 50, 10), limits = c(-50, 50), expand = c(0, 0)) +  
+  scale_color_manual(
+    values = c("elc_cost" = "orange", "elcz_eff" = "darkblue", "ship_cost" = "magenta", "elcz_cost" = "darkred"),
+    labels = c("elc_cost" = "Electricity Cost (€/MWh)", "elcz_eff" = "Electrolyzer Efficiency (%)", "ship_cost" = "Ship Cost (€)", "elcz_cost" = "Electrolyzer Cost (€/MW)")  # Editable legend labels
+  ) +  
+  scale_linetype_manual(
+    values = c("elc_cost" = "solid", "elcz_eff" = "dashed", "ship_cost" = "twodash", "elcz_cost" = "dotted"),
+    labels = c("elc_cost" = "Electricity Cost (€/MWh)", "elcz_eff" = "Electrolyzer Efficiency (%)", "ship_cost" = "Ship Cost (€)", "elcz_cost" = "Electrolyzer Cost (€/MW)")) +
+  guides(color = guide_legend(override.aes = list(size = 3))) +
+  theme(legend.key.width = unit(1.5, "cm"),
+        legend.key.height = unit(0.4, "cm"),
+        legend.text = element_text(size = 8),
+        legend.title = element_blank())
+
+dev.off()
+```
