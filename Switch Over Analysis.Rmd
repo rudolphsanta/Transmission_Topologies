@@ -455,14 +455,16 @@ Add.HV.System.Metrics <- function(DT, plant.size.MW, w.cost = 0.5,w.eta = 0.5, w
 ```
 
 ```{r FUNCTION: Run all topologies}
-Calc.Topologies <- function(PLANT = 1000, EL.P = 33, CF = 0.5, CURT = 0.05, PEM.P = 1519000, SHIP.P = 43000000, PIPE.P = 615, PEM.EFF = 0.642, DISC = 0.052, LAG = 3, CF.T = 2, CEF = 0.03) {
+Calc.Topologies <- function(PLANT = 1000, EL.P = 33, CF = 0.5, CURT = 0.05, PEM.P = 1519000, SHIP.P = 43000000, PIPE.P = 615, PEM.EFF = 0.642, DISC = 0.052, LAG = 3, CF.T = 2, CEF = 0.03, Distance = NULL) {
   
   MJ.kWh <- 3.6 #energy content of electricity
   MJ.kgH2 <- 120 #energy content of hydrogen
   
   max.dist <- 2700 #kilometers. 2,700km is the distance to point Nemo, which is the farthest ocean point from any shore.
 
-  dist.V <- seq(0, max.dist, by = 100)
+  if(is.null(Distance)) {
+    dist.V <- seq(0, max.dist, by = 100)
+    }  else {dist.V <- Distance} 
   # depth.V <- seq(1, max.depth, by = 1)
   
   # dist.depth <- expand.grid(dist.V, max.depth.V) #long matrix form
@@ -1195,25 +1197,20 @@ Policy.LAG <- Topology_A(dist.km = 20,
 
 ##Topology A vs. Topology C. Topology C may benefit from shorter permitting time due to less space required
 ```{r Results Generating}
-#Figure4
-# Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, LAG = 0)
-# Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 0)
-# Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0)
 
-#Figure5
-# Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, LAG = 20)
-# Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 3)
-# Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0)
 
-#Figure6
-Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, LAG = 20, CURT = 0.35)
-Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 3, CURT = 0.1)
-Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0, CURT = 0.05)
+
+
+
 
 ```
 
+```{r Figure 4}
+# Figure4
+Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, LAG = 0)
+Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 0)
+Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0)
 
-```{r Plot}
 # plot(x = Result.DF$distance_km, y = Result.DF$TopologyB_EUR.kgH2, type = 'b', pch = 19, col = 'blue', ylim = c(0,10))
 # lines(x = Result.DF$distance_km, y = Result.DF$TopologyC_EUR.kgLH2, type = 'b', pch = 19, col = 'green')
 # abline(v = 200, col = 'red')
@@ -1222,7 +1219,131 @@ MJ.kgH2 <- 120 #energy content of hydrogen
 
 axs.ticks <- c(0,0.02,0.04,0.06,0.08,0.1,0.12,0.14,0.16)
 
-png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Policy Manuscript/Figure6.png", width = 2100, height = 1200, res = 300)
+# png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Conversion and Management Manuscript/Figure6.png", width = 2100, height = 1200, res = 300)
+par(mar = c(5,12,1,1))
+plot(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'n', pch = 19, col = 'orange', ylim = c(0,0.16), xlim = c(0,2500), las = 1, xaxs = 'i', yaxs = 'i', yaxt = 'n', xlab = "Distance from Shore [km]", ylab = "")
+lines(x = Result.mid$distance_km, y = Result.mid$TopologyB_EUR.MJ, type = 'b', pch = 17, col = 'blue')
+lines(x = Result.mid$distance_km, y = Result.mid$TopologyC_EUR.MJ, type = 'b', pch = 15, col = 'blue')
+abline(h = 6.6/MJ.kWh, lty = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
+abline(h = 12.9/MJ.kWh, lty = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
+# lines(x = Result.high$distance_km, y = Result.high$TopologyA_EUR.MJ, type = 'l', pch = 15, col = 'orange')
+
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyB_EUR.MJ,rev(Result.low$TopologyB_EUR.MJ)),
+        col = rgb(0,0,1,0.3), border = 'blue')
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyC_EUR.MJ,rev(Result.low$TopologyC_EUR.MJ)), 
+        col = rgb(0,0,1,0.3), border = 'blue')
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyA_EUR.MJ,rev(Result.low$TopologyA_EUR.MJ)), 
+        col = rgb(255/255,165/255,0,0.5), border = 'orange')
+lines(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'b', pch = 19, col = 'orange')
+abline(v = 370, col = 'red')
+text(375,0.10,"EEZ", adj = c(1,1),srt = 90)
+axis(side = 2, pos = 0, las = 1, at = axs.ticks, labels = axs.ticks*100) #EURcent/MJ
+axis(side = 2, pos = -375, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kWh*100, col = 'orange', col.axis = 'orange') #EURcent/kWh
+axis(side = 2, pos = -850, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kgH2, col = 'blue', col.axis = 'blue') #EUR/kgH2
+mtext("€cent/MJ", side = 2, line = 1.75)
+mtext("€cent/kWh", side = 2, line = 5.9, col = 'orange')
+mtext("€/kgH2", side = 2, line = 9.9, col = 'blue')
+# legend('bottomright', legend = c("A: HVDC","C: H2 Ships"),
+#        pch = c(19,15), col = c("orange","blue"), lty = 1)
+text(2340,0.157,"14-year lag", cex = 1.2, srt = 45, adj = 1)
+text(2470,0.089,"7-year lag", cex = 1.2, srt = 29, adj = 1)
+text(2470,0.061,"Overnight deployment", cex = 1.2, srt = 21, adj = 1)
+
+
+legend('topleft', legend = c("A: HVDC","B: H2 Pipelines", "C: H2 Ships"),
+       pch = c(19,17,15), col = c("orange","blue","blue"), lty = 1)
+
+# dev.off()
+
+data.frame(Result.high$distance_km, Result.high$TopologyA_EUR.MJ - Result.low$TopologyB_EUR.MJ)
+
+```
+
+```{r Figure 5}
+# Figure5
+Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, LAG = 14)
+Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 7)
+Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0)
+
+# Figure5. best for topology B
+Result.high <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 14)
+Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 7)
+Result.low <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 0)
+
+# plot(x = Result.DF$distance_km, y = Result.DF$TopologyB_EUR.kgH2, type = 'b', pch = 19, col = 'blue', ylim = c(0,10))
+# lines(x = Result.DF$distance_km, y = Result.DF$TopologyC_EUR.kgLH2, type = 'b', pch = 19, col = 'green')
+# abline(v = 200, col = 'red')
+MJ.kWh <- 3.6 #energy content of electricity
+MJ.kgH2 <- 120 #energy content of hydrogen
+
+axs.ticks <- c(0,0.02,0.04,0.06,0.08,0.1,0.12,0.14,0.16)
+
+# png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Conversion and Management Manuscript/Figure6.png", width = 2100, height = 1200, res = 300)
+par(mar = c(5,12,1,1))
+plot(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'n', pch = 19, col = 'orange', ylim = c(0,0.16), xlim = c(0,2500), las = 1, xaxs = 'i', yaxs = 'i', yaxt = 'n', xlab = "Distance from Shore [km]", ylab = "")
+lines(x = Result.mid$distance_km, y = Result.mid$TopologyB_EUR.MJ, type = 'b', pch = 17, col = 'blue')
+lines(x = Result.mid$distance_km, y = Result.mid$TopologyC_EUR.MJ, type = 'b', pch = 15, col = 'blue')
+abline(h = 6.6/MJ.kWh, lty = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
+abline(h = 12.9/MJ.kWh, lty = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
+# lines(x = Result.high$distance_km, y = Result.high$TopologyA_EUR.MJ, type = 'l', pch = 15, col = 'orange')
+
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyB_EUR.MJ,rev(Result.low$TopologyB_EUR.MJ)),
+        col = rgb(0,0,1,0.3), border = 'blue')
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyC_EUR.MJ,rev(Result.low$TopologyC_EUR.MJ)), 
+        col = rgb(0,0,1,0.3), border = 'blue')
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(Result.high$TopologyA_EUR.MJ,rev(Result.low$TopologyA_EUR.MJ)), 
+        col = rgb(255/255,165/255,0,0.5), border = 'orange')
+lines(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'b', pch = 19, col = 'orange')
+abline(v = 370, col = 'red')
+text(375,0.10,"EEZ", adj = c(1,1),srt = 90)
+axis(side = 2, pos = 0, las = 1, at = axs.ticks, labels = axs.ticks*100) #EURcent/MJ
+axis(side = 2, pos = -375, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kWh*100, col = 'orange', col.axis = 'orange') #EURcent/kWh
+axis(side = 2, pos = -850, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kgH2, col = 'blue', col.axis = 'blue') #EUR/kgH2
+mtext("€cent/MJ", side = 2, line = 1.75)
+mtext("€cent/kWh", side = 2, line = 5.9, col = 'orange')
+mtext("€/kgH2", side = 2, line = 9.9, col = 'blue')
+# legend('bottomright', legend = c("A: HVDC","C: H2 Ships"),
+#        pch = c(19,15), col = c("orange","blue"), lty = 1)
+text(2340,0.157,"14-year lag", cex = 1.2, srt = 45, adj = 1)
+text(2470,0.089,"7-year lag", cex = 1.2, srt = 29, adj = 1)
+text(2470,0.061,"Overnight deployment", cex = 1.2, srt = 21, adj = 1)
+
+
+legend('topleft', legend = c("A: HVDC","B: H2 Pipelines", "C: H2 Ships"),
+       pch = c(19,17,15), col = c("orange","blue","blue"), lty = 1)
+
+# dev.off()
+
+data.frame(Result.high$distance_km, Result.high$TopologyA_EUR.MJ - Result.mid$TopologyB_EUR.MJ)
+
+```
+
+```{r Figure 6}
+#Figure6
+Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, LAG = 20, CURT = 0.35)
+Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 3, CURT = 0.1)
+Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0, CURT = 0.05)
+
+#Figure6. best for H2
+Result.high <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 14, CURT = 0.35)
+Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 7, CURT = 0.1)
+Result.low <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 0, CURT = 0.05)
+
+# plot(x = Result.DF$distance_km, y = Result.DF$TopologyB_EUR.kgH2, type = 'b', pch = 19, col = 'blue', ylim = c(0,10))
+# lines(x = Result.DF$distance_km, y = Result.DF$TopologyC_EUR.kgLH2, type = 'b', pch = 19, col = 'green')
+# abline(v = 200, col = 'red')
+MJ.kWh <- 3.6 #energy content of electricity
+MJ.kgH2 <- 120 #energy content of hydrogen
+
+axs.ticks <- c(0,0.02,0.04,0.06,0.08,0.1,0.12,0.14,0.16)
+
+# png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Conversion and Management Manuscript/Figure6.png", width = 2100, height = 1200, res = 300)
 par(mar = c(5,12,1,1))
 plot(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'n', pch = 19, col = 'orange', ylim = c(0,0.16), xlim = c(0,2500), las = 1, xaxs = 'i', yaxs = 'i', yaxt = 'n', xlab = "Distance from Shore [km]", ylab = "")
 lines(x = Result.mid$distance_km, y = Result.mid$TopologyB_EUR.MJ, type = 'b', pch = 17, col = 'blue')
@@ -1259,9 +1380,141 @@ text(2470,0.061,"5% curtail", cex = 1.2, srt = 21, adj = 1)
 legend('topleft', legend = c("A: HVDC","B: H2 Pipelines", "C: H2 Ships"),
        pch = c(19,17,15), col = c("orange","blue","blue"), lty = 1)
 
-dev.off()
+# dev.off()
+
+data.frame(Result.high$distance_km, Result.high$TopologyA_EUR.MJ - Result.mid$TopologyB_EUR.MJ)
 
 ```
+
+```{r Figure X - Profitability}
+# Figure6
+Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, LAG = 20, CURT = 0.35)
+Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 3, CURT = 0.1)
+Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0, CURT = 0.05)
+
+#Figure6. best for H2
+Result.high <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 14, CURT = 0.35)
+Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 7, CURT = 0.1)
+Result.low <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 0, CURT = 0.05)
+
+# plot(x = Result.DF$distance_km, y = Result.DF$TopologyB_EUR.kgH2, type = 'b', pch = 19, col = 'blue', ylim = c(0,10))
+# lines(x = Result.DF$distance_km, y = Result.DF$TopologyC_EUR.kgLH2, type = 'b', pch = 19, col = 'green')
+# abline(v = 200, col = 'red')
+MJ.kWh <- 3.6 #energy content of electricity
+MJ.kgH2 <- 120 #energy content of hydrogen
+
+EUR.kWh <- 0.10 #energy price of electricity in EUR/kWh
+EUR.kgH2 <- 7 #energy price of hydrogen in EUR/kgHw
+
+EL.EUR.MJ <- EUR.kWh/MJ.kWh #energy price in EUR/MJ for electricity
+H2.EUR.MJ <- EUR.kgH2/MJ.kgH2 #energy price in EUR/MJ for hydrogen.
+
+axs.ticks <- c(-0.06,-0.04,-0.02,0,0.02,0.04,0.06,0.08,0.1,0.12,0.14,0.16)
+
+# png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Conversion and Management Manuscript/Figure6.png", width = 2100, height = 1200, res = 300)
+par(mar = c(5,12,1,1))
+plot(x = Result.mid$distance_km, y = EL.EUR.MJ - Result.mid$TopologyA_EUR.MJ, type = 'n', pch = 19, col = 'orange', ylim = c(-0.06,0.16), xlim = c(0,2500), las = 1, xaxs = 'i', yaxs = 'i', yaxt = 'n', xlab = "Distance from Shore [km]", ylab = "")
+lines(x = Result.mid$distance_km, y = H2.EUR.MJ - Result.mid$TopologyB_EUR.MJ, type = 'b', pch = 17, col = 'blue')
+lines(x = Result.mid$distance_km, y = H2.EUR.MJ - Result.mid$TopologyC_EUR.MJ, type = 'b', pch = 15, col = 'blue')
+# abline(h = 6.6/MJ.kWh, lty = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
+# abline(h = 12.9/MJ.kWh, lty = 2, col = 'black') #low end of offshore wind LCOE according to Lazard (2023)
+# lines(x = Result.high$distance_km, y = Result.high$TopologyA_EUR.MJ, type = 'l', pch = 15, col = 'orange')
+
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(H2.EUR.MJ - Result.high$TopologyB_EUR.MJ,rev(H2.EUR.MJ - Result.low$TopologyB_EUR.MJ)),
+        col = rgb(0,0,1,0.3), border = 'blue')
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(H2.EUR.MJ - Result.high$TopologyC_EUR.MJ,rev(H2.EUR.MJ - Result.low$TopologyC_EUR.MJ)), 
+        col = rgb(0,0,1,0.3), border = 'blue')
+polygon(x = c(Result.high$distance_km,rev(Result.high$distance_km)),
+        y = c(EL.EUR.MJ - Result.high$TopologyA_EUR.MJ,rev(EL.EUR.MJ - Result.low$TopologyA_EUR.MJ)), 
+        col = rgb(255/255,165/255,0,0.5), border = 'orange')
+lines(x = Result.mid$distance_km, y = EL.EUR.MJ - Result.mid$TopologyA_EUR.MJ, type = 'b', pch = 19, col = 'orange')
+abline(v = 370, col = 'red')
+text(375,0.10,"EEZ", adj = c(1,1),srt = 90)
+axis(side = 2, pos = 0, las = 1, at = axs.ticks, labels = axs.ticks*100) #EURcent/MJ
+axis(side = 2, pos = -375, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kWh*100, col = 'orange', col.axis = 'orange') #EURcent/kWh
+axis(side = 2, pos = -850, las = 1, at = axs.ticks, labels = axs.ticks*MJ.kgH2, col = 'blue', col.axis = 'blue') #EUR/kgH2
+mtext("€cent/MJ", side = 2, line = 1.75)
+mtext("€cent/kWh", side = 2, line = 5.9, col = 'orange')
+mtext("€/kgH2", side = 2, line = 9.9, col = 'blue')
+# legend('bottomright', legend = c("A: HVDC","C: H2 Ships"),
+# #        pch = c(19,15), col = c("orange","blue"), lty = 1)
+# text(2340,0.157,"35% curtail", cex = 1.2, srt = 45, adj = 1)
+# text(2470,0.089,"10% curtail", cex = 1.2, srt = 29, adj = 1)
+# text(2470,0.061,"5% curtail", cex = 1.2, srt = 21, adj = 1)
+
+
+legend('topleft', legend = c("A: HVDC","B: H2 Pipelines", "C: H2 Ships"),
+       pch = c(19,17,15), col = c("orange","blue","blue"), lty = 1)
+
+# dev.off()
+
+data.frame(Result.high$distance_km, Result.high$TopologyA_EUR.MJ - Result.mid$TopologyB_EUR.MJ)
+
+```
+
+```{r Profitability Heat Map}
+Dist <- 100 #375 #km distance of the EEZ
+
+High_Topologies <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 14, CURT = 0.35, Distance = Dist)
+Mid_Topologies <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 7, CURT = 0.1, Distance = Dist)
+Low_Topologies <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 0, CURT = 0.05, Distance = Dist)
+
+H2_prices <- seq(0,10,by = 0.1) #prices in EUR/kgH2
+EL_prices <- seq(0, 0.5, by = 0.005) #prices in EUR/kWh
+
+H2_prices_MJ <- H2_prices/MJ.kgH2 #energy price in EUR/MJ for hydrogen.
+EL_prices_MJ <- EL_prices/MJ.kWh #energy price in EUR/MJ for electricity.
+
+rm(Heatmap_DF)
+
+for(HP in H2_prices_MJ){
+  for(EP in EL_prices_MJ){
+    #Calculate profit of Topology A, B, and C
+    TOPA_Profit <- EP - Mid_Topologies$TopologyA_EUR.MJ
+    TOPB_Profit <- HP - Mid_Topologies$TopologyB_EUR.MJ
+    TOPC_Profit <- HP - Mid_Topologies$TopologyC_EUR.MJ
+    
+    #Calculate profit difference of A and B, and that between A and C
+    TOPB_TOPA <- TOPB_Profit - TOPA_Profit
+    TOPC_TOPA <- TOPB_Profit - TOPA_Profit
+    
+    #Record to a new data frame
+    if(!exists('Heatmap_DF')) {
+      Heatmap_DF <- data.frame(EL_Price = EP, H2_Price = HP,
+                               TOPA_Positive = (TOPA_Profit > 0),
+                               TOPB_Positive = (TOPB_Profit > 0),
+                               TOPC_Positive = (TOPC_Profit > 0),
+                               B_A_Difference = TOPB_TOPA,
+                               C_A_Difference = TOPC_TOPA)
+    } else {
+      new.row <- data.frame(EL_Price = EP, H2_Price = HP,
+                            TOPA_Positive = (TOPA_Profit > 0),
+                            TOPB_Positive = (TOPB_Profit > 0),
+                            TOPC_Positive = (TOPC_Profit > 0),
+                            B_A_Difference = TOPB_TOPA,
+                            C_A_Difference = TOPC_TOPA)
+      Heatmap_DF <- rbind(Heatmap_DF, new.row)
+    }
+    
+  }
+}
+```
+
+```{r}
+library(Matrix)
+
+Heatmap_Matrix <- as.matrix(sparseMatrix(i = Heatmap_DF$EL_Price, j = Heatmap_DF$H2_Price, x = Heatmap_DF$C_A_Difference))
+
+Heatmap_Matrix <- select(Heatmap_DF, EL_Price, H2_Price, C_A_Difference) %>%
+  pivot_wider(names_from = EL_Price, values_from = C_A_Difference)
+
+Heatmap_Matrix2 <- as.matrix(Heatmap_Matrix, dimnames = "H2_Price")
+
+unique()
+```
+
 
 ##Topology A vs. Topology B. Topology B may benefit from no interconnection time
 ```{r Results Generating}
