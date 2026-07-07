@@ -22,6 +22,7 @@ library(beepr)
 library(pillar)
 library(ellipsis)
 library(rlang)
+library(ggplot2)
 
 # setwd("C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over")
 
@@ -579,8 +580,8 @@ Calc.Topologies.Stationary <- function(PLANT = 1000, DIST = 20, EL.P = 33, CF = 
   # result.A.LPOE <- result.A.LCOE - 
   
   
-  Result.DF <- data.frame(distance_km = dist,
-                         distance_factor = dist,
+  Result.DF <- data.frame(distance_km = DIST,
+                         distance_factor = DIST,
                          TopologyA_EUR.kWh = result.A.LCOE,
                          TopologyB_EUR.kgH2 = result.B.LCOE,
                          TopologyC_EUR.kgLH2 = result.C.LCOE,
@@ -605,9 +606,35 @@ Calc.Topologies.Stationary <- function(PLANT = 1000, DIST = 20, EL.P = 33, CF = 
 
 #Part 1
 ##Examine the impact of different lag times on project economics for Topology A. What is the LCOE for 0,1,...,10 year lags?
-```{r}
-undebug(Calc.Topologies)
-Calc.Topologies(LAG = 0, PLANT = 1000)
+```{r here}
+Calc.Topologies(PLANT = 1000, LAG = 0, Distance = 20, CEF = 0.03)
+Calc.Topologies.Stationary(PLANT = 1000, LAG = 9, DIST = 20, CEF = 0.03, EL.P = 35)
+Calc.Topologies.Stationary()
+
+Topology_A(dist.km = 20, plant.MW = 1000)
+
+Lag.V <- c(0,3,6,9,12,15,18)
+CEF.V <- c(0.03,0.05,0.07)
+
+rows <- list()
+
+for (i in seq_along(Lag.V)) {
+  row_vals <- c(Lag = Lag.V[i])
+  for (n in seq_along(CEF.V)) {
+    lcoe <- Calc.Topologies.Stationary(
+      PLANT = 1000,
+      DIST  = 20,
+      LAG   = Lag.V[i],
+      CEF   = CEF.V[n]
+    )$TopologyA_EUR.kWh * 1000
+    col_name <- paste0("CEF_", CEF.V[n] * 100, "pct")
+    row_vals[col_name] <- lcoe
+  }
+  rows[[i]] <- as.data.frame(t(row_vals))
+}
+
+results <- do.call(rbind, rows)
+rownames(results) <- NULL
 ```
 
 ```{r Visual of only Topology A}
@@ -637,6 +664,80 @@ text(2450,23.5,"No lag", cex = 1.2, srt = 28, adj = 1)
 
 dev.off()
 
+
+```
+
+```{r Visual of only Topology A - alternate}
+Result.A.0 <- Calc.Topologies(LAG = 0, PLANT = 1000)
+Result.A.3 <- Calc.Topologies(LAG = 3, PLANT = 1000)
+Result.A.6 <- Calc.Topologies(LAG = 6, PLANT = 1000)
+Result.A.9 <- Calc.Topologies(LAG = 9, PLANT = 1000)
+Result.A.12 <- Calc.Topologies(LAG = 12, PLANT = 1000)
+Result.A.15 <- Calc.Topologies(LAG = 15, PLANT = 1000)
+Result.A.18 <- Calc.Topologies(LAG = 18, PLANT = 1000)
+
+# setEPS()
+# postscript("Figure3-without.eps")
+png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Policy Manuscript/Figure3-alternate.png", width = 2100, height = 1200, res = 300)
+par(mar = c(5, 5, 2, 5))  # wider right margin for the side band
+
+# 1. Base plot — no data yet, just axes
+plot(x    = Result.A.3$distance_km,
+     y    = Result.A.3$TopologyA_EUR.kWh * 100,
+     type = 'n',                          # draw nothing yet
+     pch  = 19, col = 'orange',
+     ylim = c(0, 40), xlim = c(0, 2500),
+     las = 1, xaxs = 'i', yaxs = 'i',
+     xlab = "Distance from Shore [km]",
+     ylab = "LCOE [€cent/kWh]")
+
+# 2. Orange lag band (drawn first, so lines sit on top)
+polygon(x = c(Result.A.18$distance_km, rev(Result.A.18$distance_km)),
+        y = c(Result.A.18$TopologyA_EUR.kWh * 100,
+              rev(Result.A.0$TopologyA_EUR.kWh * 100)),
+        col = rgb(255/255, 165/255, 0, 0.3), border = 'orange')
+
+# 3. 3-year lag line on top of band
+lines(x = Result.A.3$distance_km,
+      y = Result.A.3$TopologyA_EUR.kWh * 100,
+      type = 'b', pch = 19, col = 'orange')
+
+# 4. Lazard band — placed to the RIGHT of the plot, outside axis area
+#    Requires xpd = TRUE to draw outside the plot region
+par(xpd = TRUE)
+
+lazard_x_left  <- 2600
+lazard_x_right <- 2670
+lazard_low     <- 6.6
+lazard_high    <- 12.9   
+
+polygon(x = c(lazard_x_left,  lazard_x_right,
+              lazard_x_right, lazard_x_left),
+        y = c(lazard_low,  lazard_low,
+              lazard_high, lazard_high),
+        col    = rgb(0/255, 204/255, 100/255, 0.4),
+        border = 'darkgreen', lwd = 1.2)
+
+# Bracket tick marks at band edges
+segments(x0 = lazard_x_left - 10, x1 = lazard_x_right + 10,
+         y0 = lazard_low,  y1 = lazard_low,  lwd = 1.5, col = 'darkgreen')
+segments(x0 = lazard_x_left - 10, x1 = lazard_x_right + 10,
+         y0 = lazard_high, y1 = lazard_high, lwd = 1.5, col = 'darkgreen')
+
+# Label — two lines, centered above the band
+text(x = (lazard_x_left + lazard_x_right) / 2,
+     y = lazard_high + 3,
+     labels = "Lazard\n(2023)",
+     cex = 0.85, adj = 0.5, col = 'darkgreen')
+
+par(xpd = FALSE)  # restore clipping
+
+# 5. Existing text labels
+text(2450, 39.6, "18-year lag", cex = 1.2, srt = 38, adj = 1)
+text(2450, 29.2, "3-year lag",  cex = 1.2, srt = 30, adj = 1)
+text(2450, 23.5, "No lag",      cex = 1.2, srt = 28, adj = 1)
+
+dev.off()
 
 ```
 
@@ -717,6 +818,7 @@ OVR <- mean.2*8760*1000*0.5*25
                        curtailment = 0.05, 
                        interconnection = 10, 
                        CF.type = 2)$LCOE.tot) #in EUR/MWh. 65.8
+
 #Discount rate
 low.r <- 0.02
 high.r <- 0.1
@@ -1154,6 +1256,24 @@ high.y <- 18
                                       CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
 
+#Construction escalation
+low.c <- 0.01
+high.c <- 1926000
+
+(Low.c <- Calc.Topologies.Stationary(PLANT = 1000,
+                                     DIST = 20,
+                                     EL.P = 33,
+                                     CURT = 0.05, 
+                                     PEM.P = 1519000,
+                                     SHIP.P = 43000000,
+                                     PIPE.P = 615,
+                                     PEM.EFF = 0.642,
+                                     DISC = 0.052, 
+                                     LAG = 3, 
+                                     CF.T = 2,
+                                     CEF = low.c) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
 ```
 
 ```{r CALCULATE Effect of ITC vs 1 year of lag reduction}
@@ -1207,9 +1327,9 @@ Policy.LAG <- Topology_A(dist.km = 20,
 
 ```{r Figure 4}
 # Figure4
-Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, LAG = 0)
-Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 0)
-Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0)
+Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, PEM.EFF = 0.641, LAG = 0)
+Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, PEM.EFF = 0.642, LAG = 0)
+Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, PEM.EFF = 0.643, LAG = 0)
 
 # plot(x = Result.DF$distance_km, y = Result.DF$TopologyB_EUR.kgH2, type = 'b', pch = 19, col = 'blue', ylim = c(0,10))
 # lines(x = Result.DF$distance_km, y = Result.DF$TopologyC_EUR.kgLH2, type = 'b', pch = 19, col = 'green')
@@ -1219,7 +1339,7 @@ MJ.kgH2 <- 120 #energy content of hydrogen
 
 axs.ticks <- c(0,0.02,0.04,0.06,0.08,0.1,0.12,0.14,0.16)
 
-# png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Conversion and Management Manuscript/Figure6.png", width = 2100, height = 1200, res = 300)
+png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Environmental Research Letters/Figures/Figure4.png", width = 2100, height = 1200, res = 300)
 par(mar = c(5,12,1,1))
 plot(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'n', pch = 19, col = 'orange', ylim = c(0,0.16), xlim = c(0,2500), las = 1, xaxs = 'i', yaxs = 'i', yaxt = 'n', xlab = "Distance from Shore [km]", ylab = "")
 lines(x = Result.mid$distance_km, y = Result.mid$TopologyB_EUR.MJ, type = 'b', pch = 17, col = 'blue')
@@ -1248,30 +1368,22 @@ mtext("€cent/kWh", side = 2, line = 5.9, col = 'orange')
 mtext("€/kgH2", side = 2, line = 9.9, col = 'blue')
 # legend('bottomright', legend = c("A: HVDC","C: H2 Ships"),
 #        pch = c(19,15), col = c("orange","blue"), lty = 1)
-text(2340,0.157,"14-year lag", cex = 1.2, srt = 45, adj = 1)
-text(2470,0.089,"7-year lag", cex = 1.2, srt = 29, adj = 1)
-text(2470,0.061,"Overnight deployment", cex = 1.2, srt = 21, adj = 1)
 
 
 legend('topleft', legend = c("A: HVDC","B: H2 Pipelines", "C: H2 Ships"),
        pch = c(19,17,15), col = c("orange","blue","blue"), lty = 1)
 
-# dev.off()
+dev.off()
 
-data.frame(Result.high$distance_km, Result.high$TopologyA_EUR.MJ - Result.low$TopologyB_EUR.MJ)
+# data.frame(Result.high$distance_km, Result.high$TopologyA_EUR.MJ - Result.low$TopologyB_EUR.MJ)
 
 ```
 
 ```{r Figure 5}
 # Figure5
-Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, LAG = 14)
-Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 7)
-Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0)
-
-# Figure5. best for topology B
-Result.high <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 14)
-Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 7)
-Result.low <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 0)
+Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, PEM.EFF = 0.641, LAG = 20)
+Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, PEM.EFF = 0.642, LAG = 3)
+Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, PEM.EFF = 0.643, LAG = 0)
 
 # plot(x = Result.DF$distance_km, y = Result.DF$TopologyB_EUR.kgH2, type = 'b', pch = 19, col = 'blue', ylim = c(0,10))
 # lines(x = Result.DF$distance_km, y = Result.DF$TopologyC_EUR.kgLH2, type = 'b', pch = 19, col = 'green')
@@ -1281,7 +1393,7 @@ MJ.kgH2 <- 120 #energy content of hydrogen
 
 axs.ticks <- c(0,0.02,0.04,0.06,0.08,0.1,0.12,0.14,0.16)
 
-# png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Conversion and Management Manuscript/Figure6.png", width = 2100, height = 1200, res = 300)
+png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Environmental Research Letters/Figures/Figure5.png", width = 2100, height = 1200, res = 300)
 par(mar = c(5,12,1,1))
 plot(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'n', pch = 19, col = 'orange', ylim = c(0,0.16), xlim = c(0,2500), las = 1, xaxs = 'i', yaxs = 'i', yaxt = 'n', xlab = "Distance from Shore [km]", ylab = "")
 lines(x = Result.mid$distance_km, y = Result.mid$TopologyB_EUR.MJ, type = 'b', pch = 17, col = 'blue')
@@ -1310,30 +1422,25 @@ mtext("€cent/kWh", side = 2, line = 5.9, col = 'orange')
 mtext("€/kgH2", side = 2, line = 9.9, col = 'blue')
 # legend('bottomright', legend = c("A: HVDC","C: H2 Ships"),
 #        pch = c(19,15), col = c("orange","blue"), lty = 1)
-text(2340,0.157,"14-year lag", cex = 1.2, srt = 45, adj = 1)
-text(2470,0.089,"7-year lag", cex = 1.2, srt = 29, adj = 1)
-text(2470,0.061,"Overnight deployment", cex = 1.2, srt = 21, adj = 1)
+text(2470,0.116,"20-year lag", cex = 1.2, srt = 38, adj = 1)
+text(2470,0.082,"3-year lag", cex = 1.2, srt = 29, adj = 1)
+text(2470,0.061,"No lag", cex = 1.2, srt = 21, adj = 1)
 
 
 legend('topleft', legend = c("A: HVDC","B: H2 Pipelines", "C: H2 Ships"),
        pch = c(19,17,15), col = c("orange","blue","blue"), lty = 1)
 
-# dev.off()
+dev.off()
 
-data.frame(Result.high$distance_km, Result.high$TopologyA_EUR.MJ - Result.mid$TopologyB_EUR.MJ)
+# data.frame(Result.high$distance_km, Result.high$TopologyA_EUR.MJ - Result.mid$TopologyB_EUR.MJ)
 
 ```
 
 ```{r Figure 6}
 #Figure6
-Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, LAG = 20, CURT = 0.35)
-Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 3, CURT = 0.1)
-Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, LAG = 0, CURT = 0.05)
-
-#Figure6. best for H2
-Result.high <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 14, CURT = 0.35)
-Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 7, CURT = 0.1)
-Result.low <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 0, CURT = 0.05)
+Result.high <- Calc.Topologies(EL.P = 35, PEM.P = 1926000, PEM.EFF = 0.641, LAG = 20, CURT = 0.35)
+Result.mid <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, PEM.EFF = 0.642, LAG = 3, CURT = 0.1)
+Result.low <- Calc.Topologies(EL.P = 29, PEM.P = 1198000, PEM.EFF = 0.643, LAG = 0, CURT = 0.05)
 
 # plot(x = Result.DF$distance_km, y = Result.DF$TopologyB_EUR.kgH2, type = 'b', pch = 19, col = 'blue', ylim = c(0,10))
 # lines(x = Result.DF$distance_km, y = Result.DF$TopologyC_EUR.kgLH2, type = 'b', pch = 19, col = 'green')
@@ -1343,7 +1450,7 @@ MJ.kgH2 <- 120 #energy content of hydrogen
 
 axs.ticks <- c(0,0.02,0.04,0.06,0.08,0.1,0.12,0.14,0.16)
 
-# png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Conversion and Management Manuscript/Figure6.png", width = 2100, height = 1200, res = 300)
+png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Environmental Research Letters/Figures/Figure6.png", width = 2100, height = 1200, res = 300)
 par(mar = c(5,12,1,1))
 plot(x = Result.mid$distance_km, y = Result.mid$TopologyA_EUR.MJ, type = 'n', pch = 19, col = 'orange', ylim = c(0,0.16), xlim = c(0,2500), las = 1, xaxs = 'i', yaxs = 'i', yaxt = 'n', xlab = "Distance from Shore [km]", ylab = "")
 lines(x = Result.mid$distance_km, y = Result.mid$TopologyB_EUR.MJ, type = 'b', pch = 17, col = 'blue')
@@ -1372,19 +1479,21 @@ mtext("€cent/kWh", side = 2, line = 5.9, col = 'orange')
 mtext("€/kgH2", side = 2, line = 9.9, col = 'blue')
 # legend('bottomright', legend = c("A: HVDC","C: H2 Ships"),
 #        pch = c(19,15), col = c("orange","blue"), lty = 1)
-text(2340,0.157,"35% curtail", cex = 1.2, srt = 45, adj = 1)
-text(2470,0.089,"10% curtail", cex = 1.2, srt = 29, adj = 1)
-text(2470,0.061,"5% curtail", cex = 1.2, srt = 21, adj = 1)
+text(2340,0.157,"35% Curtailment", cex = 1.2, srt = 44, adj = 1)
+text(2470,0.089,"10% Curtailment", cex = 1.2, srt = 28, adj = 1)
+text(2470,0.061,"5% Curtailment", cex = 1.2, srt = 20, adj = 1)
 
 
 legend('topleft', legend = c("A: HVDC","B: H2 Pipelines", "C: H2 Ships"),
        pch = c(19,17,15), col = c("orange","blue","blue"), lty = 1)
 
-# dev.off()
+dev.off()
 
-data.frame(Result.high$distance_km, Result.high$TopologyA_EUR.MJ - Result.mid$TopologyB_EUR.MJ)
+# data.frame(Result.high$distance_km, Result.high$TopologyA_EUR.MJ - Result.mid$TopologyB_EUR.MJ)
 
 ```
+
+##Profitability
 
 ```{r Figure X - Profitability}
 # Figure6
@@ -1400,8 +1509,8 @@ Result.low <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 0, CURT = 0.05)
 # plot(x = Result.DF$distance_km, y = Result.DF$TopologyB_EUR.kgH2, type = 'b', pch = 19, col = 'blue', ylim = c(0,10))
 # lines(x = Result.DF$distance_km, y = Result.DF$TopologyC_EUR.kgLH2, type = 'b', pch = 19, col = 'green')
 # abline(v = 200, col = 'red')
-MJ.kWh <- 3.6 #energy content of electricity
-MJ.kgH2 <- 120 #energy content of hydrogen
+MJ.kWh <- 3.6 #energy content of electricity. 3.6 MJ/kWh
+MJ.kgH2 <- 120 #energy content of hydrogen. 120 MJ/kgH2
 
 EUR.kWh <- 0.10 #energy price of electricity in EUR/kWh
 EUR.kgH2 <- 7 #energy price of hydrogen in EUR/kgHw
@@ -1454,15 +1563,105 @@ data.frame(Result.high$distance_km, Result.high$TopologyA_EUR.MJ - Result.mid$To
 
 ```
 
+
+```{r Country H2 and EL prices}
+usd_to_eur <- 0.91
+
+
+# price_data <- data.frame(
+#   Country = c("USA", "Germany", "France", "UK", "Japan", "China", "India", "Australia", "Canada", "UAE"),
+#   Elec_Low = usd_to_eur * c(0.13, 0.34, 0.20, 0.32, 0.20, 0.06, 0.05, 0.18, 0.08, 0.03)/MJ.kWh, #now in EUR/MJ
+#   Elec_High = usd_to_eur * c(0.19, 0.42, 0.30, 0.40, 0.27, 0.10, 0.09, 0.45, 0.19, 0.07)/MJ.kWh,
+#   H2_Low = usd_to_eur * c(3.5, 7.0, 6.5, 6.5, 5.0, 2.0, 3.5, 4.0, 4.5, 1.5)/MJ.kgH2,
+#   H2_High = usd_to_eur * c(6.0, 10.5, 9.5, 9.0, 7.0, 4.5, 5.0, 7.0, 6.5, 3.5)/MJ.kgH2
+# )
+
+# price_data <- data.frame(
+#   Country = c("USA", "Japan", "Germany", "China", "Netherlands", "UK"),
+#   Elec_Low = usd_to_eur * c(0.083, 0.20, 0.34, 0.075, 0.27, 0.32)/MJ.kWh,
+#   Elec_High = usd_to_eur * c(0.1747, 0.27, 0.42, 0.093, 0.32, 0.4)/MJ.kWh,
+#   H2_Low = usd_to_eur * c(2, 3, 1, 4, 5, 13)/MJ.kgH2,
+#   H2_High = usd_to_eur * c(23, 23, 15, 10, 12, 20)/MJ.kgH2
+# )
+
+# price_data <- data.frame(
+#   Country = c("Denmark","Germany","Netherlands","Portugal","UK","USA","China","EU-Average"),
+#   Elec_Low = c(0.1485,0.1596,0.1493,0.1164,0.27,0.1243,0.075,0.1934)/MJ.kWh,
+#   Elec_High = c(0.3636,0.2973,0.4436,0.2983,0.5,0.1499,0.093,0.2401)/MJ.kWh,
+#   H2_Low = c(3,3,3,3,3,2,6,3)/MJ.kgH2,
+#   H2_High = c(10,10,10,10,10,10,8,10)/MJ.kgH2
+# )
+
+price_data <- data.frame(
+  Country = c("UK","USA","China","EU-Average"),
+  Elec_Low = c(0.27,0.1243,0.075,0.1934)/MJ.kWh,
+  Elec_High = c(0.5,0.1499,0.093,0.2401)/MJ.kWh,
+  H2_Low = c(3,2,6,3)/MJ.kgH2,
+  H2_High = c(10,10,8,10)/MJ.kgH2
+)
+
+# Calculate centers and radii for ellipses
+data <- price_data %>%
+  mutate(
+    x_center = (Elec_Low + Elec_High) / 2,
+    y_center = (H2_Low + H2_High) / 2,
+    x_radius = (Elec_High - Elec_Low) / 2,
+    y_radius = (H2_High - H2_Low) / 2
+  )
+
+# Generate ellipse points
+get_ellipse <- function(cx, cy, rx, ry, n = 100){
+  t <- seq(0, 2*pi, length.out = n)
+  data.frame(
+    x = cx + rx * cos(t),
+    y = cy + ry * sin(t)
+  )
+}
+
+# Build ellipse data for plotting
+ellipse_data <- do.call(rbind, lapply(1:nrow(data), function(i) {
+  e <- get_ellipse(data$x_center[i], data$y_center[i], data$x_radius[i], data$y_radius[i])
+  e$Country <- data$Country[i]
+  return(e)
+}))
+
+ellipses_layer <- geom_polygon(
+  data = ellipse_data,
+  aes(x = x, y = y, group = Country, fill = Country),
+  alpha = 0.5, color = "black"
+)
+
+labels_layer <- geom_text(
+  data = data,
+  aes(x = x_center, y = y_center, label = Country),
+  size = 3
+)
+
+# Plot
+ggplot(ellipse_data, aes(x = x, y = y)) +
+  geom_polygon(aes(fill = Country, group = Country), alpha = 0.5, color = "black") +
+  geom_text(data = data, aes(x = x_center, y = y_center, label = Country), size = 3) +
+  labs(
+    title = "Hydrogen vs Electricity Residential Price Ranges",
+    x = "Electricity Price (EUR/MJ)",
+    y = "Hydrogen Price (EUR/MJ)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+#Profitability Heat Map Base
 ```{r Profitability Heat Map}
-Dist <- 100 #375 #km distance of the EEZ
+Dist <- 1000 #375 #km distance of the EEZ
 
 High_Topologies <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 14, CURT = 0.35, Distance = Dist)
 Mid_Topologies <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 7, CURT = 0.1, Distance = Dist)
 Low_Topologies <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 0, CURT = 0.05, Distance = Dist)
 
-H2_prices <- seq(0,10,by = 0.1) #prices in EUR/kgH2
-EL_prices <- seq(0, 0.5, by = 0.005) #prices in EUR/kWh
+H2_prices <- seq(0,12,by = 1) #prices in EUR/kgH2
+H2_prices_breaks <- seq(0, 12, by = 2)
+EL_prices <- seq(0, 0.5, by = 0.025) #prices in EUR/kWh
+EL_prices_breaks <- seq(0, 0.5, by = 0.1)
 
 H2_prices_MJ <- H2_prices/MJ.kgH2 #energy price in EUR/MJ for hydrogen.
 EL_prices_MJ <- EL_prices/MJ.kWh #energy price in EUR/MJ for electricity.
@@ -1472,7 +1671,159 @@ rm(Heatmap_DF)
 for(HP in H2_prices_MJ){
   for(EP in EL_prices_MJ){
     #Calculate profit of Topology A, B, and C
-    TOPA_Profit <- EP - Mid_Topologies$TopologyA_EUR.MJ
+    TOPA_Profit <- EP - Low_Topologies$TopologyA_EUR.MJ
+    TOPB_Profit <- HP - Low_Topologies$TopologyB_EUR.MJ
+    TOPC_Profit <- HP - Low_Topologies$TopologyC_EUR.MJ
+    
+    #Calculate profit difference of A and B, and that between A and C
+    TOPB_TOPA <- TOPB_Profit - TOPA_Profit
+    TOPC_TOPA <- TOPB_Profit - TOPA_Profit
+    
+    #Record to a new data frame
+    if(!exists('Heatmap_DF')) {
+      Heatmap_DF <- data.frame(EL_Price = EP, H2_Price = HP,
+                               TOPA_Positive = (TOPA_Profit > 0),
+                               TOPB_Positive = (TOPB_Profit > 0),
+                               TOPC_Positive = (TOPC_Profit > 0),
+                               B_A_Difference = TOPB_TOPA,
+                               C_A_Difference = TOPC_TOPA)
+    } else {
+      new.row <- data.frame(EL_Price = EP, H2_Price = HP,
+                            TOPA_Positive = (TOPA_Profit > 0),
+                            TOPB_Positive = (TOPB_Profit > 0),
+                            TOPC_Positive = (TOPC_Profit > 0),
+                            B_A_Difference = TOPB_TOPA,
+                            C_A_Difference = TOPC_TOPA)
+      Heatmap_DF <- rbind(Heatmap_DF, new.row)
+    }
+    
+  }
+}
+```
+
+```{r}
+pct_pth_base <- sum(Heatmap_DF$B_A_Difference > 0)/dim(Heatmap_DF)[1]
+pct_hvdc_base <- sum(Heatmap_DF$B_A_Difference < 0)/dim(Heatmap_DF)[1]
+pct_pth_base
+pct_hvdc_base
+```
+
+
+```{r Heatmap of Top B to Top A Difference}
+p <- ggplot() + 
+  geom_tile(data = Heatmap_DF, aes(x = EL_Price, y = H2_Price, fill = B_A_Difference)) +
+  scale_fill_gradient2(
+    low = "orange",       # for negative values
+    mid = "white",     # for zero
+    high = "blue",     # for positive values
+    breaks = seq(-0.151, 0.151, by = 0.05), #positions of the breaks for color gradient changes
+    limits = c(-0.151, 0.151),
+    midpoint = 0,
+    labels = c("HVDC more profitable", "-10", "-5", "0", "5", "10", "PtH more profitable"),
+    name = "Profit difference (€cent/MJ)"
+  ) +
+  # scale_x_continuous(labels = function(x) round(x*MJ.kWh,3)) + 
+  scale_x_continuous(breaks = EL_prices_breaks / MJ.kWh,
+                     labels = EL_prices_breaks) + 
+  # scale_y_continuous(labels = function(y) round(y*MJ.kgH2,5)) + 
+  scale_y_continuous(breaks = H2_prices_breaks / MJ.kgH2,
+                     labels = H2_prices_breaks) + 
+  labs(
+    # title = "Profitability Difference: Topology B and A",
+    x = "Electricity Price [€/kWh]",
+    y = "Hydrogen Price [€/kg]"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.title = element_text(face = "bold"),
+    legend.title.align = 0
+  ) +
+  annotate("text",
+    x = 0, y = 12/MJ.kgH2, # top-left corner in data coordinates
+    label = "PtH more profitable\nin 33% of scenarios",
+    hjust = 0, vjust = 1,
+    size = 4, fontface = "bold",
+    color = "black"
+  ) +
+  annotate("text",
+    x = 0.5/MJ.kWh, y = 0, # bottom-right corner in data coordinates
+    label = "HVDC more profitable\nin 67% of scenarios",
+    hjust = 1, vjust = 0,
+    size = 4, fontface = "bold",
+    color = "black"
+  ) +
+  theme_minimal()
+
+for(name in unique(ellipse_data$Country)) {
+  p <- p + geom_polygon(data = ellipse_data[ellipse_data$Country == name, ], aes(x = x, y = y), alpha = 0.1, color = "black")
+}
+
+p <- p + coord_cartesian(clip = "on") + geom_text(data = data, aes(x = x_center, y = y_center, label = Country), size = 3)
+
+png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Conversion and Management Manuscript/Figure11_1000base.png", width = 2100, height = 1200, res = 300)
+par(mar = c(5,12,1,1))
+p
+dev.off()
+
+```
+
+
+```{r Heatmap of B to C 2}
+p <- ggplot(Heatmap_DF, aes(x = EL_Price, y = H2_Price)) +
+  geom_tile(aes(fill = B_A_Difference)) +
+  scale_fill_gradient2(
+    low = "red",
+    mid = "white",
+    high = "blue",
+    midpoint = 0,
+    name = "B_A_Difference"
+  )
+
+# Overlay black tiles where either TOPA_Positive or TOPB_Positive is FALSE
+p <- p + 
+  geom_tile(data = Heatmap_DF %>% filter(!TOPA_Positive & TOPB_Positive), fill = "gray") +
+  geom_tile(data = Heatmap_DF %>% filter(TOPA_Positive & !TOPB_Positive), fill = "yellow") +
+  geom_tile(data = Heatmap_DF %>% filter(!TOPA_Positive & !TOPB_Positive), fill = "black")
+
+# Add labels and theme
+p <- p +
+  theme_minimal() +
+  labs(
+    title = "Heatmap of B_A_Difference by EL_Price and H2_price",
+    x = "EL Price",
+    y = "H2 Price"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.title = element_text(face = "bold")
+  ) 
+  
+# Show the plot
+print(p)
+```
+
+#Profitability Heat Map Alt
+```{r Profitability Heat Map}
+Dist <- 1000 #375 #km distance of the EEZ
+
+High_Topologies <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 14, CURT = 0.35, Distance = Dist)
+Mid_Topologies <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 7, CURT = 0.1, Distance = Dist)
+Low_Topologies <- Calc.Topologies(EL.P = 33, PEM.P = 1519000, LAG = 0, CURT = 0.05, Distance = Dist)
+
+H2_prices <- seq(0,12,by = 1) #prices in EUR/kgH2
+H2_prices_breaks <- seq(0, 12, by = 2)
+EL_prices <- seq(0, 0.5, by = 0.025) #prices in EUR/kWh
+EL_prices_breaks <- seq(0, 0.5, by = 0.1)
+
+H2_prices_MJ <- H2_prices/MJ.kgH2 #energy price in EUR/MJ for hydrogen.
+EL_prices_MJ <- EL_prices/MJ.kWh #energy price in EUR/MJ for electricity.
+
+rm(Heatmap_DF)
+
+for(HP in H2_prices_MJ){
+  for(EP in EL_prices_MJ){
+    #Calculate profit of Topology A, B, and C
+    TOPA_Profit <- EP - High_Topologies$TopologyA_EUR.MJ
     TOPB_Profit <- HP - Mid_Topologies$TopologyB_EUR.MJ
     TOPC_Profit <- HP - Mid_Topologies$TopologyC_EUR.MJ
     
@@ -1503,17 +1854,159 @@ for(HP in H2_prices_MJ){
 ```
 
 ```{r}
-library(Matrix)
-
-Heatmap_Matrix <- as.matrix(sparseMatrix(i = Heatmap_DF$EL_Price, j = Heatmap_DF$H2_Price, x = Heatmap_DF$C_A_Difference))
-
-Heatmap_Matrix <- select(Heatmap_DF, EL_Price, H2_Price, C_A_Difference) %>%
-  pivot_wider(names_from = EL_Price, values_from = C_A_Difference)
-
-Heatmap_Matrix2 <- as.matrix(Heatmap_Matrix, dimnames = "H2_Price")
-
-unique()
+pct_pth_base <- sum(Heatmap_DF$B_A_Difference > 0)/dim(Heatmap_DF)[1]
+pct_hvdc_base <- sum(Heatmap_DF$B_A_Difference < 0)/dim(Heatmap_DF)[1]
+pct_pth_base
+pct_hvdc_base
 ```
+
+
+```{r Heatmap of Top B to Top A Difference}
+p <- ggplot() + 
+  geom_tile(data = Heatmap_DF, aes(x = EL_Price, y = H2_Price, fill = B_A_Difference)) +
+  scale_fill_gradient2(
+    low = "orange",       # for negative values
+    mid = "white",     # for zero
+    high = "blue",     # for positive values
+    breaks = seq(-0.15, 0.15, by = 0.05), #positions of the breaks for color gradient changes
+    limits = c(-0.15, 0.15),
+    midpoint = 0,
+    labels = c("HVDC more profitable", "-10", "-5", "0", "5", "10", "PtH more profitable"),
+    name = "Profit difference (€cent/MJ)"
+  ) +
+  # scale_x_continuous(labels = function(x) round(x*MJ.kWh,3)) + 
+  scale_x_continuous(breaks = EL_prices_breaks / MJ.kWh,
+                     labels = EL_prices_breaks) + 
+  # scale_y_continuous(labels = function(y) round(y*MJ.kgH2,5)) + 
+  scale_y_continuous(breaks = H2_prices_breaks / MJ.kgH2,
+                     labels = H2_prices_breaks) + 
+  labs(
+    # title = "Profitability Difference: Topology B and A",
+    x = "Electricity Price [€/kWh]",
+    y = "Hydrogen Price [€/kg]"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.title = element_text(face = "bold"),
+    legend.title.align = 0
+  ) +
+  annotate("text",
+    x = 0, y = 12/MJ.kgH2, # top-left corner in data coordinates
+    label = "PtH more profitable\nin 46% of scenarios",
+    hjust = 0, vjust = 1,
+    size = 4, fontface = "bold",
+    color = "black"
+  ) +
+  annotate("text",
+    x = 0.5/MJ.kWh, y = 0, # bottom-right corner in data coordinates
+    label = "HVDC more profitable\nin 54% of scenarios",
+    hjust = 1, vjust = 0,
+    size = 4, fontface = "bold",
+    color = "black"
+  ) +
+  theme_minimal()
+
+for(name in unique(ellipse_data$Country)) {
+  p <- p + geom_polygon(data = ellipse_data[ellipse_data$Country == name, ], aes(x = x, y = y), alpha = 0.1, color = "black")
+}
+
+p <- p + coord_cartesian(clip = "on") + geom_text(data = data, aes(x = x_center, y = y_center, label = Country), size = 3)
+
+png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Conversion and Management Manuscript/Figure11_1000alt.png", width = 2100, height = 1200, res = 300)
+par(mar = c(5,12,1,1))
+p
+dev.off()
+
+```
+
+
+```{r Heatmap of Top C to Top A Difference}
+p <- ggplot() +
+  geom_tile(data = Heatmap_DF, aes(x = EL_Price, y = H2_Price, fill = C_A_Difference)) +
+  scale_fill_gradient2(
+    low = "orange",       # for negative values
+    mid = "white",     # for zero
+    high = "blue",     # for positive values
+    midpoint = 0,
+    name = "Profit difference (€/MJ)"
+  ) +
+    # scale_x_continuous(labels = function(x) round(x*MJ.kWh,3)) + 
+  scale_x_continuous(breaks = EL_prices_breaks / MJ.kWh,
+                     labels = EL_prices_breaks) + 
+  # scale_y_continuous(labels = function(y) round(y*MJ.kgH2,5)) + 
+  scale_y_continuous(breaks = H2_prices_breaks / MJ.kgH2,
+                     labels = H2_prices_breaks) +
+  labs(
+    title = "Profitability Differences beetween topology C and A",
+    x = "Electricity Price (€/MJ)",
+    y = "Hydrogen Price (€/MJ)"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.title = element_text(face = "bold")
+  ) +
+      annotate(
+    "text",
+    x = 0, y = 10/MJ.kgH2, # top-left corner in data coordinates
+    label = "Topology C\nmore profitable",
+    hjust = 0, vjust = 1,
+    size = 4, fontface = "bold",
+    color = "black"
+  ) +
+  annotate(
+    "text",
+    x = 0.5/MJ.kWh, y = 0, # bottom-right corner in data coordinates
+    label = "Topology A\nmore profitable",
+    hjust = 1, vjust = 0,
+    size = 4, fontface = "bold",
+    color = "black"
+  ) +
+  theme_minimal()
+
+for(name in unique(ellipse_data$Country)) {
+  p <- p + geom_polygon(data = ellipse_data[ellipse_data$Country == name, ], aes(x = x, y = y), alpha = 0.25, color = "black")
+}
+
+p <- p + geom_text(data = data, aes(x = x_center, y = y_center, label = Country), size = 3)
+
+p
+
+```
+
+```{r Heatmap of C to A 2}
+p <- ggplot(Heatmap_DF, aes(x = EL_Price, y = H2_Price)) +
+  geom_tile(aes(fill = C_A_Difference)) +
+  scale_fill_gradient2(
+    low = "red",
+    mid = "white",
+    high = "blue",
+    midpoint = 0,
+    name = "C_A_Difference"
+  )
+
+# Overlay black tiles where either TOPA_Positive or TOPB_Positive is FALSE
+p <- p + 
+  geom_tile(data = Heatmap_DF %>% filter(!TOPA_Positive & TOPC_Positive), fill = "gray") +
+  geom_tile(data = Heatmap_DF %>% filter(TOPA_Positive & !TOPC_Positive), fill = "yellow") +
+  geom_tile(data = Heatmap_DF %>% filter(!TOPA_Positive & !TOPC_Positive), fill = "black")
+
+# Add labels and theme
+p <- p +
+  theme_minimal() +
+  labs(
+    title = "Heatmap of C_A_Difference by EL_Price and H2_price",
+    x = "EL Price",
+    y = "H2 Price"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.title = element_text(face = "bold")
+  )
+
+# Show the plot
+print(p)
+```
+
 
 
 ##Topology A vs. Topology B. Topology B may benefit from no interconnection time
