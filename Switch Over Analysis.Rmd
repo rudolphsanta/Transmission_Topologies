@@ -937,12 +937,38 @@ high.e <- 35
                       interconnection = 10, 
                       CF.type = 2)$LCOE.tot)
 
-#ITC level {percent}
+#escalation factor
+low.es <- 0.01
+high.es <- 0.1
+
+(Low.e <- Topology_A(dist.km = 20, 
+                     plant.MW = 1000, 
+                     cf = 0.52, 
+                     EL.price = 33, 
+                     r = 0.052, 
+                     life = 25, 
+                     curtailment = 0.05, 
+                     interconnection = 10, 
+                     CF.type = 2,
+                     esc = low.es)$LCOE.tot)
+
+
+
+(High.e <- Topology_A(dist.km = 20, 
+                     plant.MW = 1000, 
+                     cf = 0.52, 
+                     EL.price = 33, 
+                     r = 0.052, 
+                     life = 25, 
+                     curtailment = 0.05, 
+                     interconnection = 10, 
+                     CF.type = 2,
+                     esc = high.es)$LCOE.tot)
 ```
 
 
-```{r SENSITIVITY ANALYSIS ON Topology Difference: discount rate, years of lag, project size, distance to shore, electricity cost, PEM cost, Ship Cost, Storage cost}
 
+```{r SENSITIVITY ANALYSIS ON Topology Difference: discount rate, years of lag, project size, distance to shore, electricity cost, PEM cost, Ship Cost, Storage cost}
 Baseline <- Calc.Topologies.Stationary(PLANT = 1000,
                                        DIST = 20,
                                        EL.P = 33,
@@ -952,10 +978,13 @@ Baseline <- Calc.Topologies.Stationary(PLANT = 1000,
                                        PIPE.P = 615,
                                        PEM.EFF = 0.642,
                                        DISC = 0.052, 
-                                       LAG = 3, 
+                                       LAG = 10, 
                                        CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB)
+```
 
+
+```{r SENSITIVITY ANALYSIS ON Topology Difference: discount rate, years of lag, project size, distance to shore, electricity cost, PEM cost, Ship Cost, Storage cost}
 #Plant Size
 low.p <- 100
 high.p <- 2000
@@ -969,7 +998,7 @@ high.p <- 2000
                                      PIPE.P = 615,
                                      PEM.EFF = 0.642,
                                      DISC = 0.052, 
-                                     LAG = 3, 
+                                     LAG = 10, 
                                      CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
 
@@ -982,10 +1011,13 @@ high.p <- 2000
                                       PIPE.P = 615,
                                       PEM.EFF = 0.642,
                                       DISC = 0.052, 
-                                      LAG = 3, 
+                                      LAG = 10, 
                                       CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+```
 
+
+```{r SENSITIVITY ANALYSIS ON Topology Difference: discount rate, years of lag, project size, distance to shore, electricity cost, PEM cost, Ship Cost, Storage cost}
 #Shore distance
 low.d <- 5
 high.d <- 200
@@ -999,7 +1031,7 @@ high.d <- 200
                                      PIPE.P = 615,
                                      PEM.EFF = 0.642,
                                      DISC = 0.052, 
-                                     LAG = 3, 
+                                     LAG = 10, 
                                      CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
 
@@ -1012,10 +1044,13 @@ high.d <- 200
                                       PIPE.P = 615,
                                       PEM.EFF = 0.642,
                                       DISC = 0.052, 
-                                      LAG = 3, 
+                                      LAG = 10, 
                                       CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+```
 
+
+```{r SENSITIVITY ANALYSIS ON Topology Difference: discount rate, years of lag, project size, distance to shore, electricity cost, PEM cost, Ship Cost, Storage cost}
 #Electricity price
 low.e <- 29
 high.e <- 35
@@ -1029,7 +1064,7 @@ high.e <- 35
                                      PIPE.P = 615,
                                      PEM.EFF = 0.642,
                                      DISC = 0.052, 
-                                     LAG = 3, 
+                                     LAG = 10, 
                                      CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
 
@@ -1042,10 +1077,13 @@ high.e <- 35
                                       PIPE.P = 615,
                                       PEM.EFF = 0.642,
                                       DISC = 0.052, 
-                                      LAG = 3, 
+                                      LAG = 10, 
                                       CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+```
 
+
+```{r SENSITIVITY ANALYSIS ON Topology Difference: discount rate, years of lag, project size, distance to shore, electricity cost, PEM cost, Ship Cost, Storage cost}
 #Curtailment
 low.c <- 0.02
 high.c <- 0.3
@@ -1059,7 +1097,7 @@ high.c <- 0.3
                                      PIPE.P = 615,
                                      PEM.EFF = 0.642,
                                      DISC = 0.052, 
-                                     LAG = 3, 
+                                     LAG = 10, 
                                      CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
 
@@ -1072,10 +1110,13 @@ high.c <- 0.3
                                       PIPE.P = 615,
                                       PEM.EFF = 0.642,
                                       DISC = 0.052, 
-                                      LAG = 3, 
+                                      LAG = 10, 
                                       CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+```
 
+
+```{r SENSITIVITY ANALYSIS ON Topology Difference: discount rate, years of lag, project size, distance to shore, electricity cost, PEM cost, Ship Cost, Storage cost}
 #Electrolyzer cost
 low.p <- 1198000
 high.p <- 1926000
@@ -1089,7 +1130,7 @@ high.p <- 1926000
                                      PIPE.P = 615,
                                      PEM.EFF = 0.642,
                                      DISC = 0.052, 
-                                     LAG = 3, 
+                                     LAG = 10, 
                                      CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
 
@@ -1102,10 +1143,13 @@ high.p <- 1926000
                                       PIPE.P = 615,
                                       PEM.EFF = 0.642,
                                       DISC = 0.052, 
-                                      LAG = 3, 
+                                      LAG = 10, 
                                       CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+```
 
+
+```{r SENSITIVITY ANALYSIS ON Topology Difference: discount rate, years of lag, project size, distance to shore, electricity cost, PEM cost, Ship Cost, Storage cost}
 #Ship cost
 low.s <- 25000000
 high.s <- 80000000
@@ -1119,7 +1163,7 @@ high.s <- 80000000
                                      PIPE.P = 615,
                                      PEM.EFF = 0.642,
                                      DISC = 0.052, 
-                                     LAG = 3, 
+                                     LAG = 10, 
                                      CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
 
@@ -1132,10 +1176,13 @@ high.s <- 80000000
                                       PIPE.P = 615,
                                       PEM.EFF = 0.642,
                                       DISC = 0.052, 
-                                      LAG = 3, 
+                                      LAG = 10, 
                                       CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+```
 
+
+```{r SENSITIVITY ANALYSIS ON Topology Difference: discount rate, years of lag, project size, distance to shore, electricity cost, PEM cost, Ship Cost, Storage cost}
 #Pipe cost
 low.l <- 500
 high.l <- 700
@@ -1149,7 +1196,7 @@ high.l <- 700
                                      PIPE.P = low.l,
                                      PEM.EFF = 0.642,
                                      DISC = 0.052, 
-                                     LAG = 3, 
+                                     LAG = 10, 
                                      CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
 
@@ -1162,10 +1209,13 @@ high.l <- 700
                                       PIPE.P = high.l,
                                       PEM.EFF = 0.642,
                                       DISC = 0.052, 
-                                      LAG = 3, 
+                                      LAG = 10, 
                                       CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+```
 
+
+```{r SENSITIVITY ANALYSIS ON Topology Difference: discount rate, years of lag, project size, distance to shore, electricity cost, PEM cost, Ship Cost, Storage cost}
 #Electrolyzer efficiency
 low.n <- 0.62
 high.n <- 0.7
@@ -1179,7 +1229,7 @@ high.n <- 0.7
                                      PIPE.P = 615,
                                      PEM.EFF = low.n,
                                      DISC = 0.052, 
-                                     LAG = 3, 
+                                     LAG = 10, 
                                      CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
 
@@ -1192,10 +1242,13 @@ high.n <- 0.7
                                       PIPE.P = 615,
                                       PEM.EFF = high.n,
                                       DISC = 0.052, 
-                                      LAG = 3, 
+                                      LAG = 10, 
                                       CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+```
 
+
+```{r SENSITIVITY ANALYSIS ON Topology Difference: discount rate, years of lag, project size, distance to shore, electricity cost, PEM cost, Ship Cost, Storage cost}
 #Discount rate
 low.r <- 0.02
 high.r <- 0.1
@@ -1209,7 +1262,7 @@ high.r <- 0.1
                                      PIPE.P = 615,
                                      PEM.EFF = 0.642,
                                      DISC = low.r, 
-                                     LAG = 3, 
+                                     LAG = 10, 
                                      CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
 
@@ -1222,10 +1275,13 @@ high.r <- 0.1
                                       PIPE.P = 615,
                                       PEM.EFF = 0.642,
                                       DISC = high.r, 
-                                      LAG = 3, 
+                                      LAG = 10, 
                                       CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+```
 
+
+```{r SENSITIVITY ANALYSIS ON Topology Difference: discount rate, years of lag, project size, distance to shore, electricity cost, PEM cost, Ship Cost, Storage cost}
 #Years of lag
 low.y <- 3
 high.y <- 18
@@ -1256,11 +1312,16 @@ high.y <- 18
                                       CF.T = 2) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
 
-#Construction escalation
-low.c <- 0.01
-high.c <- 1926000
 
-(Low.c <- Calc.Topologies.Stationary(PLANT = 1000,
+
+```
+
+```{r SENSITIVITY ANALYSIS ON Topology Difference: discount rate, years of lag, project size, distance to shore, electricity cost, PEM cost, Ship Cost, Storage cost}
+#annual CAPEX Escalation
+low.es <- 0.01
+high.es <- 0.1
+
+(Low.y <- Calc.Topologies.Stationary(PLANT = 1000,
                                      DIST = 20,
                                      EL.P = 33,
                                      CURT = 0.05, 
@@ -1269,12 +1330,29 @@ high.c <- 1926000
                                      PIPE.P = 615,
                                      PEM.EFF = 0.642,
                                      DISC = 0.052, 
-                                     LAG = 3, 
+                                     LAG = 10, 
                                      CF.T = 2,
-                                     CEF = low.c) %>%
+                                     CEF = low.es) %>%
   select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
 
+(High.y <- Calc.Topologies.Stationary(PLANT = 1000,
+                                      DIST = 20,
+                                      EL.P = 33,
+                                      CURT = 0.05, 
+                                      PEM.P = 1519000,
+                                      SHIP.P = 43000000,
+                                      PIPE.P = 615,
+                                      PEM.EFF = 0.642,
+                                      DISC = 0.052, 
+                                      LAG = 10, 
+                                      CF.T = 2,
+                                      CEF = high.es) %>%
+  select(TopologyA_EUR.MJ, DIFF.AC, DIFF.AB))
+
+
+
 ```
+
 
 ```{r CALCULATE Effect of ITC vs 1 year of lag reduction}
 Policy.Base <- Topology_A(dist.km = 20, 
@@ -2323,17 +2401,17 @@ while(Diff.CA >= 0) { #starting from the minimum theoretical cost, increase the 
 ```{r Toranado Plot, fig.width=8}
 
 
-# library(ggplot2)
-# library(ggpattern)
-# library(reshape2)
+library(ggplot2)
+library(ggpattern)
+library(reshape2)
 
 # Create a dataframe
 df <- data.frame(
-  Parameter = c("Discount Rate [%]", "Years of lag [years]","Distance to shore [km]","Electricity cost [€/MWh]","Project Size [MW]"),
-  Low_Input = c(-10.48,-6.97,-1.7,-5.54,0.01),
-  Low_Input_Label = c(55,59,64,60,66),
-  High_Input = c(21.12,7.98,5.99,1.07,-1.19),
-  High_Input_Label = c(87,74,72,67,65)
+  Parameter = c("Discount Rate [%]", "Years of lag [years]","Annual CAPEX Escalation [%]","Distance to shore [km]","Electricity cost [€/MWh]","Project Size [MW]"),
+  Low_Input = c(-10.48,-6.97,-3.21,-1.7,-5.54,0.01),
+  Low_Input_Label = c(55,59,63,64,60,66),
+  High_Input = c(21.12,7.98,8.34,5.99,1.07,-1.19),
+  High_Input_Label = c(87,74,74,72,67,65)
 )
 
 # Reshape data for ggplot
@@ -2353,7 +2431,7 @@ df_long$Pattern_Color <- ifelse(df_long$Input_Type == "Low_Input", "orange", "da
 df_long$Label <- c(df$Low_Input_Label, df$High_Input_Label)
 
 # Create tornado plot
-png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Energy Policy Manuscript/Figure7final.png", width = 2100, height = 1200, res = 300)
+png(filename = "C:/Users/Rudolph/Desktop/Rudolph/0 - CMU - Portugal PhD Files/0 - Research/Transmission Switch Over/Environmental Research Letters/Figures/Figure7.png", width = 2100, height = 1200, res = 300)
 
 par(mar=c(5,5,2,2))
 
@@ -2370,8 +2448,8 @@ ggplot(df_long, aes(x = Impact, y = Parameter, fill = Fill,
   geom_vline(xintercept = 0, color = "darkred", linewidth = 1.2) +
   xlim(-15,25) + 
   labs(title = "", x = "Change from Baseline LCOE (€/MWh)", y = "") +
-  annotate("text", x = -0.4, y = 5.5, label = "Baseline LCOE", size = 4, hjust = 1, color = "darkred") +
-  annotate("text", x = 0.4, y = 5.5, label = "= 65.8 €/MWh", size = 4, hjust = 0, color = "darkred") +
+  annotate("text", x = -0.4, y = 6.5, label = "Baseline LCOE", size = 4, hjust = 1, color = "darkred") +
+  annotate("text", x = 0.4, y = 6.5, label = "= 65.8 €/MWh", size = 4, hjust = 0, color = "darkred") +
   theme_minimal() +
   scale_x_continuous(breaks = seq(-20, 30, 5), limits = c(-20, 30), expand = c(0,0)) +
   theme(legend.position = "right", 
